@@ -38,15 +38,15 @@
 #'The "bspgldrm" class is a list of the following items.
 #' \itemize{
 #' \item \code{samples} A list containing the MCMC samples for \code{f0} and \code{beta}.
-#' \item \code{mb} Prior mean for beta.
-#' \item \code{sb} Diagonal entries of the prior variance-covariance matrix for beta.
+#' \item \code{mb} Prior mean for \code{beta}.
+#' \item \code{sb} Diagonal entries of the prior variance-covariance matrix for \code{beta}.
 #' \item \code{dir_pr_parm} Dirichlet prior parameter.
 #' \item \code{formula} Model formula.
 #' \item \code{data} Model data frame.
 #' \item \code{link} Link function. If a character string was passed to the
 #' \code{link} argument, then this will be an object of class "link-glm".
 #' Otherwise, it will be the list of three functions passed to the \code{link} argument.
-#' \item \code{spt} Support, \{s_j, j = 1(1)l\}, of response variable y.
+#' \item \code{spt} Support, \eqn{\{s_j, \ j = 1, 2, ..., l\}}, of response variable \code{y}.
 #' \item \code{mu0} Mean of the reference distribution \code{f0}.
 #' }
 #'
@@ -110,7 +110,7 @@ bspgldrm <- function(formula, data=NULL, link="log", mb=NULL, sb=NULL, dir_pr_pa
         !is.vectorized(mu.eta, inveta.testdata)) stop("link must be vectorized.")
   }
 
-  ## 3. Call MCMC helper
+  ## 3. Fit
   fit <- bspgldrmFit(
     formula              = formula,
     data                 = data,
@@ -124,7 +124,7 @@ bspgldrm <- function(formula, data=NULL, link="log", mb=NULL, sb=NULL, dir_pr_pa
     thetaControl         = thetaControl
   )
 
-  ## 5. Output
+  ## 4. Output
   out <- list(
     samples     = fit$samples,
     mb          = fit$mb,

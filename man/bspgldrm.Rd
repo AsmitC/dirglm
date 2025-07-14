@@ -62,14 +62,16 @@ mirror the "link-glm" class. Objects of this class can be created with the
 The "bspgldrm" class is a list of the following items.
 \itemize{
 \item \code{samples} A list containing the MCMC samples for \code{f0} and \code{beta}.
-\item \code{mb} Prior mean for beta.
-\item \code{sb} Diagonal entries of the prior variance-covariance matrix for beta.
+\item \code{mb} Prior mean for \code{beta}.
+\item \code{sb} Diagonal entries of the prior variance-covariance matrix for \code{beta}.
 \item \code{dir_pr_parm} Dirichlet prior parameter.
 \item \code{formula} Model formula.
 \item \code{data} Model data frame.
 \item \code{link} Link function. If a character string was passed to the
 \code{link} argument, then this will be an object of class "link-glm".
 Otherwise, it will be the list of three functions passed to the \code{link} argument.
+\item \code{spt} Support, \eqn{\{s_j, \ j = 1, 2, ..., l\}}, of response variable \code{y}.
+\item \code{mu0} Mean of the reference distribution \code{f0}.
 }
 }
 \examples{

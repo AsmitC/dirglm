@@ -7,7 +7,7 @@
 #' @param burnin Number of burn-in MCMC iterations. Defaults to 100.
 #' @param thin Factor by which to thin MCMC iterations. Defaults to 10.
 #' @param save Number of MCMC samples to return. Defaults to 1000.
-#' @param rho MCMC update step size. A scalar in (0, 1]. Defaults to 0.1.
+#' @param rho MCMC update step size. A scalar in \eqn{(0, 1]}. Defaults to 0.1.
 #' @param mu0 Mean of the reference distribution. The reference distribution is
 #' not unique unless its mean is restricted to a specific value. This value can
 #' be any number within the range of observed values, but values near the boundary
@@ -18,28 +18,32 @@
 #' Defaults to the output obtained by fitting \code{gldrm}.
 #' @param f0Start Initial value for the reference distribution \code{f0}.
 #' Defaults to the output obtained by fitting \code{gldrm}.
-#' @param joint.update Logical indicating whether to update beta jointly.
-#' Defaults to \code{TRUE}
+#' @param joint.update Logical indicating whether to update \code{beta} jointly.
+#' Defaults to \code{TRUE}.
+#' @param seed Random seed. Defaults to NULL.
 #'
 #' @return Object of S3 class "bspgldrmControl"
 #'
 #' @export
 bspgldrm.control <- function(burnin=100, thin=10, save=1000, rho=0.1, mu0=NULL, spt=NULL,
-                             betaStart=NULL, f0Start=NULL, joint.update=TRUE)
+                             betaStart=NULL, f0Start=NULL, joint.update=TRUE, seed=NULL)
 {
   if (burnin < 0 || floor(burnin) != burnin) stop("Number of burn-in samples must be an integer >= 0")
   if (thin   < 1 || floor(thin)   != thin)   stop("Thin must be an integer >= 1")
   if (save   < 1 || floor(save)   != save)   stop("Number of saved iterations must be an integer >= 1")
   if (!(rho <= 1 & rho > 0))                 stop("rho must lie in (0, 1]")
-  ctrl <- list(burnin      = burnin,
-               thin        = thin,
-               save        = save,
-               rho.        = rho,
-               mu0         = mu0,
-               spt         = spt,
-               betaStart   = betaStart,
-               f0Start     = f0Start,
-               joint.update= joint.update)
+  if (!is.logical(joint.update) ||
+      !joint.update %in% c(T, F))            stop("joint.update must be logical TRUE/FALSE")
+  ctrl <- list(burnin       = burnin,
+               thin         = thin,
+               save         = save,
+               rho.         = rho,
+               mu0          = mu0,
+               spt          = spt,
+               betaStart    = betaStart,
+               f0Start      = f0Start,
+               joint.update = joint.update,
+               seed         = seed)
   class(ctrl) <- "bspgldrmControl"
   ctrl
 }
@@ -64,6 +68,9 @@ bspgldrmFit <- function(formula, data, X, y,                # Data
   joint.update <- bspgldrmControl$joint.update
   betaStart    <- bspgldrmControl$betaStart
   f0Start      <- bspgldrmControl$f0Start
+  seed         <- bspgldrmControl$seed
+
+  if (!is.null(seed)) set.seed(seed) # Set seed
 
   ## 1.1 Extract link
   linkfun <- link$linkfun
@@ -83,8 +90,6 @@ bspgldrmFit <- function(formula, data, X, y,                # Data
 
   ## 4. MCMC Initialization
   if (is.null(betaStart)) {
-    #message("class(data): ", paste(class(data), collapse=", "))
-    #message("is.data.frame(data): ", is.data.frame(data))
     gfit <- gldrm(formula      = formula,
                   data         = data,
                   link         = link,
@@ -142,6 +147,15 @@ bspgldrmFit <- function(formula, data, X, y,                # Data
 
   ### 4.2 Theta
   mu      <- linkinv(X %*% beta)                   # Updated for general link
+  # [DEBUG]
+  #message("spt:", spt)
+  #message(paste0("f0:", f0))
+  message(cat("beta=", beta))
+  for(i in seq_along(mu)){cat("mu[",i,"]= ",mu[i],"\n")}
+  #message(paste0("hi:", max(mu), "which hi:", which.max(mu)))
+  #message("any mu = 1?", any(mu==1))
+  #message(paste0("lo:", min(mu), "which lo:", which.min(mu)))
+
   out     <- tht_sol(spt, f0, mu, NULL)
   tht     <- out$tht
   btht    <- out$btht

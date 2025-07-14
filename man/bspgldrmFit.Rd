@@ -6,6 +6,7 @@
 \usage{
 bspgldrmFit(
   formula,
+  data,
   X,
   y,
   link,
