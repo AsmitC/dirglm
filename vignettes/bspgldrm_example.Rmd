@@ -30,7 +30,8 @@ require(extraDistr)
 require(dplyr)
 
 # Simulation scenario 1 ----
-sim_dat_1 <- function(n, p) {
+sim_dat_1 <- function(n, p, seed=100) {
+  set.seed(seed)
   X <- matrix(c(rep(1, n), rnorm(n * (p-1), mean = 0, sd = 1)),
               byrow = F,
               nrow = n,
@@ -57,7 +58,8 @@ sim_dat_1 <- function(n, p) {
 
 
 # Simulation scenario 2 ----
-sim_dat_2 <- function(n, p) {
+sim_dat_2 <- function(n, p, seed=100) {
+  set.seed(seed)
   X <- matrix(c(rep(1, n), rnorm(n * (p-1), mean = 0, sd = 1)),
               byrow = F,
               nrow = n,
@@ -86,15 +88,16 @@ sim_dat_2 <- function(n, p) {
 }
 
 # Simulation scenario 3 ----
-## Binary logistic regression
-sim_dat_3 <- function(n, p) {
+##  Multinomial logistic regression
+sim_dat_3 <- function(n, p, seed=100) {
+  set.seed(seed)
   X <- matrix(c(rep(1, n), rnorm(n * (p-1), mean = 0, sd = 1)),
               byrow = FALSE, nrow = n, ncol = p)
   beta <- numeric(p)
   beta[1:2] <- c(-1, 1)               # True beta
-  mu <- plogis(X %*% beta)            # True mu, g(mu) = logit(mu) = X*beta
-  spt <- 0:1
-  f0  <- dbinom(spt, size = 1, prob = 0.5) # True f0
+  spt <- 0:5
+  mu <- 5 * plogis(X %*% beta)             # True mu
+  f0  <- dbinom(spt, size = 5, prob = 0.5) # True f0
   theta <- gldrm:::getTheta(
     spt = spt,
     f0  = f0,
@@ -103,6 +106,30 @@ sim_dat_3 <- function(n, p) {
     ySptIndex  = NULL
   )$theta
   prob <- t(sapply(1:n, function(i) exp(theta[i] * spt) * f0))
+  # No need to normalize below, prob specified
+  y    <- sapply(1:n, function(i) sample(spt, 1, prob = prob[i, ])) # Simulated y
+  data.frame(X, y)
+}
+
+sim_dat_4 <- function(n, p, seed=100) {
+  set.seed(seed)
+  X <- matrix(c(rep(1, n), runif(n * (p-1), min=-1, max=1)),
+              byrow = FALSE, nrow = n, ncol = p)
+  beta <- numeric(p)
+  beta[1:2] <- c(5, 2)               # True beta
+  mu <- X %*% beta                   # True mu
+  spt <- 0:10
+  l <- length(spt)
+  f0 <- rep(1/l, l)                  # True f0
+  theta <- gldrm:::getTheta(
+    spt       = spt,
+    f0        = f0,
+    mu        = mu,
+    sampprobs = NULL,
+    ySptIndex = NULL
+  )$theta
+  prob <- t(sapply(1:n, function(i) exp(theta[i] * spt) * f0))
+  # No need to normalize below, prob specified
   y    <- sapply(1:n, function(i) sample(spt, 1, prob = prob[i, ])) # Simulated y
   data.frame(X, y)
 }
@@ -110,10 +137,9 @@ sim_dat_3 <- function(n, p) {
 
 # Simulation
 
-## Example 1
+## Example 1: Truncated Poisson
 ```{r}
 ## Example 1
-
 spt <- 0:5
 mu0 <- 1
 data <- sim_dat_1(n = 500, p = 2)
@@ -124,8 +150,7 @@ colMeans(beta_samples)        # true beta is c(-0.7, 0.2)
 colMeans(f0_samples)          # true f0 is truncated Poisson = (0.368, 0.368, 0.184, 0.061, 0.015, 0.003) [rounded]
 ```
 
-
-## Example 2
+## Example 2: Zero-inflated truncated Poisson
 ```{r}
 ## Example 2
 spt <- 0:5
@@ -138,16 +163,73 @@ colMeans(beta_samples)        # true beta is c(-0.7, 0.2)
 colMeans(f0_samples)          # true f0 is tilted, truncated Poisson = (0.636, 0.212, 0.106, 0.035, 0.009, 0.002) [rounded]
 ```
 
-## Example 3
+## Example 3: Multiple Logistic Regression
 ```{r}
 ## Example 3
-spt <- 0:1
-mu0 <- 0.5
-data <- sim_dat_3(n = 5000, p = 3)
-dir_glm.fit <- bspgldrm(y ~ X2 + X3, data=data, link="logit",
+spt <- 0:5
+mu0 <- 2.5
+data <- sim_dat_3(n = 500, p = 3)
+### Define link
+link <- list(
+  linkfun <- function(mu) log(mu / (5 - mu)),
+  linkinv <- function(eta) 5 * plogis(eta),
+  mu.eta  <- function(eta) 5 * plogis(eta) * (1 - plogis(eta))
+)
+names(link) <- c("linkfun", "linkinv", "mu.eta")
+dir_glm.fit <- bspgldrm(y ~ X2 + X3, data=data, link=link,
                         bspgldrmControl=bspgldrm.control(mu0=mu0, spt=spt))
 beta_samples <- dir_glm.fit$samples$beta
 f0_samples <- dir_glm.fit$samples$f0
 colMeans(beta_samples)        # true beta is c(-1, 1)
-colMeans(f0_samples)          # true f0 is bernoulli(0.5)
+colMeans(f0_samples)          # true f0 is binomial = (0.031, 0.156, 0.313, 0.313, 0.156, 0.031) [rounded]
+```
+
+## Example 4: Uniform baseline with Identity link
+```{r}
+## Example 4
+spt <- 0:10
+mu0 <- 5
+data <- sim_dat_4(n = 500, p = 5)
+dir_glm.fit <- bspgldrm(y ~ X2 + X3 + X4 + X5, data=data, link="identity",
+                        bspgldrmControl=bspgldrm.control(mu0=mu0, spt=spt))
+beta_samples <- dir_glm.fit$samples$beta
+f0_samples <- dir_glm.fit$samples$f0
+colMeans(beta_samples)        # true beta is c(5, 2)
+colMeans(f0_samples)          # true f0 is uniform = (0.1, 0.1, 0.1, ..., 0.1)
+```
+
+
+```{r}
+set.seed(100)
+# Note: without intercept, expect mu = y i.e., beta = c(0, 1)
+# but getTheta fails via floating point issue I think.
+# Not sure how gldrm is getting past that
+n <- 10
+y <- rep(c(0, 1), each=n/2)
+x <- cbind(1, y)
+
+#m1 <- gldrm(y~x-1, data=NULL, link="identity")
+traceback()
+m1 <- bspgldrm(y ~ x - 1, data=NULL, link="identity")
+traceback()
+```
+
+```{r}
+gldrm:::getTheta(
+     spt = c(0, 1),
+     f0 = c(0.5, 0.5),
+     mu = c(rep(-2.77555756156289e-17, 5), rep(1, 5)),
+     sampprobs = NULL,
+     ySptIndex = NULL,
+     thetaStart = NULL
+)
+```
+
+```{r}
+n <- 10
+y <- rep(c(0, 1), each=n/2)
+x <- matrix(1, nrow=n, ncol=2)
+
+m1 <- bspgldrm(y ~ x - 1, data=NULL, link="identity")
+#expect_equal(colMeans(m1$samples$beta), c(.5, NA), tolerance=1e-2, ignore_attr=TRUE)
 ```

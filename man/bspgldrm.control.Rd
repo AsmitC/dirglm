@@ -23,7 +23,7 @@ bspgldrm.control(
 
 \item{save}{Number of MCMC samples to return. Defaults to 1000.}
 
-\item{rho}{MCMC update step size, a (scalar) in (0, 1]. Defaults to 0.1.}
+\item{rho}{MCMC update step size. A scalar in (0, 1]. Defaults to 0.1.}
 
 \item{mu0}{Mean of the reference distribution. The reference distribution is
 not unique unless its mean is restricted to a specific value. This value can

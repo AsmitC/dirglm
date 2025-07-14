@@ -49,7 +49,7 @@ bspgldrm.control <- function(burnin=100, thin=10, save=1000, rho=0.1, mu0=NULL, 
 #' This function is called by the main \code{bspgldrm} function.
 #'
 #' @keywords internal
-bspgldrmFit <- function(formula, X, y,                      # Data
+bspgldrmFit <- function(formula, data, X, y,                # Data
                         link,                               # Link
                         mb, sb, dir_pr_parm,                # Priors
                         bspgldrmControl, thetaControl)      # Controls
@@ -83,6 +83,8 @@ bspgldrmFit <- function(formula, X, y,                      # Data
 
   ## 4. MCMC Initialization
   if (is.null(betaStart)) {
+    #message("class(data): ", paste(class(data), collapse=", "))
+    #message("is.data.frame(data): ", is.data.frame(data))
     gfit <- gldrm(formula      = formula,
                   data         = data,
                   link         = link,
@@ -119,7 +121,6 @@ bspgldrmFit <- function(formula, X, y,                      # Data
   f0_samples[1, ]   <- f0
 
   ### 4.1 Validate priors
-
   ### 4.1.1 Beta prior
   if (is.null(mb) || is.null(sb)) {
     if (is.null(mb)) mb <- rep(0, p)
@@ -141,6 +142,12 @@ bspgldrmFit <- function(formula, X, y,                      # Data
 
   ### 4.2 Theta
   mu      <- linkinv(X %*% beta)                   # Updated for general link
+  message("spt:", spt)
+  message(paste0("f0:", f0))
+  for(i in seq_along(mu)){cat(mu[i],"\n")}
+  message(paste0("hi:", max(mu), "which hi:", which.max(mu)))
+  message("any mu = 1?", any(mu==1))
+  message(paste0("lo:", min(mu), "which lo:", which.min(mu)))
   out     <- tht_sol(spt, f0, mu, NULL)
   tht     <- out$tht
   btht    <- out$btht
@@ -184,11 +191,29 @@ bspgldrmFit <- function(formula, X, y,                      # Data
     }
   }
 
-  ## 6. Output
+  ## 6. Tilt each f0 sample
+  f0star_samples <- matrix(0, nrow = nrow(f0_samples), ncol = length(spt))
+  for (iter in 1:nrow(f0_samples)) {
+    wh     <- f0_samples[iter, ]
+    theta0 <- gldrm:::getTheta(
+      spt = spt,
+      f0 = wh,
+      mu = mu0,
+      sampprobs = NULL,
+      ySptIndex = NULL
+    )$theta
+    wh                     <- wh * exp(theta0 * spt)
+    wh                     <- wh / sum(wh)
+    f0star_samples[iter, ] <- wh
+  }
+  f0_samples     <- f0star_samples  # projected f0 samples
+
+  ## 7. Output
   list(samples     = list(beta = beta_samples,
                           f0   = f0_samples),
        mb          = mb,
        sb          = sb,
-       dir_pr_parm = dir_pr_parm)
+       dir_pr_parm = dir_pr_parm,
+       spt         = spt,
+       mu0         = mu0)
 }
-

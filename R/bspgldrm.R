@@ -46,6 +46,8 @@
 #' \item \code{link} Link function. If a character string was passed to the
 #' \code{link} argument, then this will be an object of class "link-glm".
 #' Otherwise, it will be the list of three functions passed to the \code{link} argument.
+#' \item \code{spt} Support, \{s_j, j = 1(1)l\}, of response variable y.
+#' \item \code{mu0} Mean of the reference distribution \code{f0}  .
 #' }
 #'
 #' @examples
@@ -93,11 +95,11 @@ bspgldrm <- function(formula, data=NULL, link="log", mb=NULL, sb=NULL, dir_pr_pa
 
   if (test.vectorized) { # User has specified a custom link
     is.vectorized <- function(f, data) {
-      out <- tryCatch(f(test.vals),
+      out <- tryCatch(f(data),
                       error   = function(e) e,
                       warning = function(w) w)
       if (inherits(out, "error") || inherits(out, "warning")) return(FALSE)
-      is.atomic(out) && length(out) == length(test.vals)
+      is.atomic(out) && length(out) == length(data)
     }
 
     linkfun.testdata <- rep(mean(y), 3)
@@ -111,6 +113,7 @@ bspgldrm <- function(formula, data=NULL, link="log", mb=NULL, sb=NULL, dir_pr_pa
   ## 3. Call MCMC helper
   fit <- bspgldrmFit(
     formula              = formula,
+    data                 = data,
     X                    = X,
     y                    = y,
     link                 = link,
@@ -121,25 +124,6 @@ bspgldrm <- function(formula, data=NULL, link="log", mb=NULL, sb=NULL, dir_pr_pa
     thetaControl         = thetaControl
   )
 
-  ## 4. Tilt each f0 sample
-  f0_samples <- fit$samples$f0
-  f0star_samples <- matrix(0, nrow = nrow(f0_samples), ncol = length(spt))
-  for (iter in 1:nrow(f0_samples)) {
-    wh     <- f0_samples[iter, ]
-    theta0 <- gldrm:::getTheta(
-      spt = spt,
-      f0 = wh,
-      mu = mu0,
-      sampprobs = NULL,
-      ySptIndex = NULL
-    )$theta
-    wh                     <- wh * exp(theta0 * spt)
-    wh                     <- wh / sum(wh)
-    f0star_samples[iter, ] <- wh
-  }
-  f0_samples     <- f0star_samples  # projected f0 samples
-  fit$samples$f0 <- f0_samples
-
   ## 5. Output
   out <- list(
     samples     = fit$samples,
@@ -148,7 +132,9 @@ bspgldrm <- function(formula, data=NULL, link="log", mb=NULL, sb=NULL, dir_pr_pa
     dir_pr_parm = fit$dir_pr_parm,
     formula     = formula,
     data        = data.frame(mf),
-    link        = link
+    link        = link,
+    spt         = fit$spt,
+    mu0         = fit$mu0
   )
   class(out) <- "bspgldrm"
   out
