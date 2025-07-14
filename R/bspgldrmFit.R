@@ -89,6 +89,8 @@ bspgldrmFit <- function(formula, data, X, y,                # Data
   }
 
   ## 4. MCMC Initialization
+
+  ### 4.1 beta
   if (is.null(betaStart)) {
     gfit <- gldrm(formula      = formula,
                   data         = data,
@@ -98,6 +100,7 @@ bspgldrmFit <- function(formula, data, X, y,                # Data
     betaStart <- gfit$beta
   }
 
+  ### 4.2 f0
   if (is.null(f0Start)) {
     f0      <- rep(1 / l, l)
     tht0    <- gldrm:::getTheta(
@@ -112,6 +115,18 @@ bspgldrmFit <- function(formula, data, X, y,                # Data
   }
 
   init <- list(beta = betaStart, f0 = f0Start)
+
+  ## 4.3 Drop coefficients if x is not full rank (add NA values back at the end)
+  beta <- init$beta
+  naID <- is.na(beta)
+  beta <- beta[!naID]
+  X <- X[, !naID, drop=FALSE]
+  eta <- c(X %*% beta)
+  mu <- linkinv(eta)
+  if (ncol(X) >= n) stop("bspgldrm requires n > p.")
+  if (any(mu<min(spt) | mu>max(spt))) stop(paste0("Unable to find beta starting values",
+                                                  "that do not violate convex hull condition."))
+
   X    <- as.matrix(X)
   n    <- length(y)
   p    <- ncol(X)
@@ -120,13 +135,13 @@ bspgldrmFit <- function(formula, data, X, y,                # Data
   beta_samples <- matrix(NA, nrow = save, ncol = p)
   f0_samples   <- matrix(NA, nrow = save, ncol = l)
 
-  beta <- init$beta
+  #beta <- init$beta
   f0   <- init$f0
   beta_samples[1, ] <- beta
   f0_samples[1, ]   <- f0
 
-  ### 4.1 Validate priors
-  ### 4.1.1 Beta prior
+  ### 4.4 Validate priors
+  ### 4.4.1 Beta prior
   if (is.null(mb) || is.null(sb)) {
     if (is.null(mb)) mb <- rep(0, p)
     if (is.null(sb)) sb <- rep(1, p)
@@ -135,7 +150,7 @@ bspgldrmFit <- function(formula, data, X, y,                # Data
   else if   (!all(sb)    > 0) stop(paste0("Beta prior variance-covariance matrix must be positive definite. ",
                                    "Check that all(sb > 0)."))
 
-  ### 4.1.2 Dirichlet prior
+  ### 4.4.2 Dirichlet prior
   if (is.null(dir_pr_parm)) {
     ind_mt      <- outer(y, spt, `==`) * 1
     alpha       <- 1
@@ -145,13 +160,13 @@ bspgldrmFit <- function(formula, data, X, y,                # Data
   } else if (!all(dir_pr_parm > 0) ||
              length(dir_pr_parm)   != l) stop("dir_pr_parm must be positive with K atoms.")
 
-  ### 4.2 Theta
-  mu      <- linkinv(X %*% beta)                   # Updated for general link
+  ### 4.5 Theta
+  #mu      <- linkinv(X %*% beta)                   # Updated for general link [uncomment if mu calc above gone]
   # [DEBUG]
   #message("spt:", spt)
   #message(paste0("f0:", f0))
-  message(cat("beta=", beta))
-  for(i in seq_along(mu)){cat("mu[",i,"]= ",mu[i],"\n")}
+  #message(cat("beta=", beta))
+  #for(i in seq_along(mu)){cat("mu[",i,"]= ",mu[i],"\n")}
   #message(paste0("hi:", max(mu), "which hi:", which.max(mu)))
   #message("any mu = 1?", any(mu==1))
   #message(paste0("lo:", min(mu), "which lo:", which.min(mu)))
@@ -216,7 +231,13 @@ bspgldrmFit <- function(formula, data, X, y,                # Data
   }
   f0_samples     <- f0star_samples  # projected f0 samples
 
-  ## 7. Output
+  ## 7. Add NA values back into beta vector covariate matrix is not full rank
+  nBeta <- dim(beta_samples)[2] + sum(naID)
+  betaTemp <- matrix(NA, nrow=iter, ncol=nBeta)
+  betaTemp[, !naID] <- beta_samples
+  beta_samples <- betaTemp
+
+  ## 8. Output
   list(samples     = list(beta = beta_samples,
                           f0   = f0_samples),
        mb          = mb,

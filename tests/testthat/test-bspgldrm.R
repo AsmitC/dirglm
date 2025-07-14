@@ -84,14 +84,15 @@ test_that("bspgldrm matches logistic regression", {
   #expect_equal(mu, y, tolerance=1e-2)
 #})
 
-#test_that("Can handle singular covariate matrix", {
-  #n <- 10
-  #y <- rep(c(0, 1), each=n/2)
-  #x <- matrix(1, nrow=n, ncol=2)
+test_that("Can handle singular covariate matrix", {
+  n <- 10
+  y <- rep(c(0, 1), each=n/2)
+  x <- matrix(1, nrow=n, ncol=2)
 
-  #m1 <- bspgldrm(y ~ x - 1, data=NULL, link="identity")
-  #expect_equal(colMeans(m1$samples$beta), c(.5, NA), tolerance=1e-2, ignore_attr=TRUE)
+  ctrl <- bspgldrm::bspgldrm.control(burnin=1000, thin=20, save=5000)
+  m1 <- bspgldrm(y ~ x - 1, data=NULL, link="identity")
+  expect_equal(colMeans(m1$samples$beta), c(.5, NA), tolerance=1e-2, ignore_attr=TRUE)
 
-  #m2 <- bspgldrm(y ~ x - 1, data=NULL, link="logit")
-  #expect_equal(colMeans(m2$samples$beta), c(0, NA), tolerance=1e-2, ignore_attr=TRUE)
-#})
+  m2 <- bspgldrm(y ~ x - 1, data=NULL, link="logit")
+  expect_equal(colMeans(m2$samples$beta), c(0, NA), tolerance=1e-2, ignore_attr=TRUE)
+})
