@@ -231,5 +231,18 @@ y <- rep(c(0, 1), each=n/2)
 x <- matrix(1, nrow=n, ncol=2)
 
 m1 <- bspgldrm(y ~ x - 1, data=NULL, link="identity")
-#expect_equal(colMeans(m1$samples$beta), c(.5, NA), tolerance=1e-2, ignore_attr=TRUE)
+traceback()
+expect_equal(colMeans(m1$samples$beta), c(.5, NA), tolerance=1e-2, ignore_attr=TRUE)
+
+m2 <- bspgldrm(y ~ x - 1, data=NULL, link="logit")
+expect_equal(colMeans(m2$samples$beta), c(0, NA), tolerance=1e-2, ignore_attr=TRUE)
+```
+
+```{r}
+n <- 10
+p <- 5
+beta <- rep(0, p)
+X <- matrix(1, nrow=10, ncol=p)
+link <- stats::make.link("identity")
+link$linkinv(X %*% beta)
 ```

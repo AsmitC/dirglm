@@ -142,12 +142,6 @@ bspgldrmFit <- function(formula, data, X, y,                # Data
 
   ### 4.2 Theta
   mu      <- linkinv(X %*% beta)                   # Updated for general link
-  message("spt:", spt)
-  message(paste0("f0:", f0))
-  for(i in seq_along(mu)){cat(mu[i],"\n")}
-  message(paste0("hi:", max(mu), "which hi:", which.max(mu)))
-  message("any mu = 1?", any(mu==1))
-  message(paste0("lo:", min(mu), "which lo:", which.min(mu)))
   out     <- tht_sol(spt, f0, mu, NULL)
   tht     <- out$tht
   btht    <- out$btht

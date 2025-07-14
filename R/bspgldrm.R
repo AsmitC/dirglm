@@ -47,7 +47,7 @@
 #' \code{link} argument, then this will be an object of class "link-glm".
 #' Otherwise, it will be the list of three functions passed to the \code{link} argument.
 #' \item \code{spt} Support, \{s_j, j = 1(1)l\}, of response variable y.
-#' \item \code{mu0} Mean of the reference distribution \code{f0}  .
+#' \item \code{mu0} Mean of the reference distribution \code{f0}.
 #' }
 #'
 #' @examples
