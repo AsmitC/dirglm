@@ -48,6 +48,8 @@
 #' Otherwise, it will be the list of three functions passed to the \code{link} argument.
 #' \item \code{spt} Support, \eqn{\{s_j, \ j = 1, 2, ..., l\}}, of response variable \code{y}.
 #' \item \code{mu0} Mean of the reference distribution \code{f0}.
+#' \item \code{p_acc} Proportion of accepted proposals during MCMC.
+#' \item \code{iter} The total number of MCMC iterations.
 #' }
 #'
 #' @examples
@@ -134,7 +136,9 @@ bspgldrm <- function(formula, data=NULL, link="log", mb=NULL, sb=NULL, dir_pr_pa
     data        = data.frame(mf),
     link        = link,
     spt         = fit$spt,
-    mu0         = fit$mu0
+    mu0         = fit$mu0,
+    p_acc       = fit$p_acc,
+    iter        = fit$iter
   )
   class(out) <- "bspgldrm"
   out

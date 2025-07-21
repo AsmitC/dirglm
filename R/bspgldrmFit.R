@@ -115,18 +115,6 @@ bspgldrmFit <- function(formula, data, X, y,                # Data
   }
 
   init <- list(beta = betaStart, f0 = f0Start)
-
-  ## 4.3 Drop coefficients if x is not full rank (add NA values back at the end)
-  beta <- init$beta
-  naID <- is.na(beta)
-  beta <- beta[!naID]
-  X <- X[, !naID, drop=FALSE]
-  eta <- c(X %*% beta)
-  mu <- linkinv(eta)
-  if (ncol(X) >= n) stop("bspgldrm requires n > p.")
-  if (any(mu<min(spt) | mu>max(spt))) stop(paste0("Unable to find beta starting values",
-                                                  "that do not violate convex hull condition."))
-
   X    <- as.matrix(X)
   n    <- length(y)
   p    <- ncol(X)
@@ -135,13 +123,13 @@ bspgldrmFit <- function(formula, data, X, y,                # Data
   beta_samples <- matrix(NA, nrow = save, ncol = p)
   f0_samples   <- matrix(NA, nrow = save, ncol = l)
 
-  #beta <- init$beta
+  beta <- init$beta
   f0   <- init$f0
   beta_samples[1, ] <- beta
   f0_samples[1, ]   <- f0
 
-  ### 4.4 Validate priors
-  ### 4.4.1 Beta prior
+  ### 4.3 Validate priors
+  ### 4.3.1 Beta prior
   if (is.null(mb) || is.null(sb)) {
     if (is.null(mb)) mb <- rep(0, p)
     if (is.null(sb)) sb <- rep(1, p)
@@ -150,7 +138,7 @@ bspgldrmFit <- function(formula, data, X, y,                # Data
   else if   (!all(sb)    > 0) stop(paste0("Beta prior variance-covariance matrix must be positive definite. ",
                                    "Check that all(sb > 0)."))
 
-  ### 4.4.2 Dirichlet prior
+  ### 4.3.2 Dirichlet prior
   if (is.null(dir_pr_parm)) {
     ind_mt      <- outer(y, spt, `==`) * 1
     alpha       <- 1
@@ -160,23 +148,15 @@ bspgldrmFit <- function(formula, data, X, y,                # Data
   } else if (!all(dir_pr_parm > 0) ||
              length(dir_pr_parm)   != l) stop("dir_pr_parm must be positive with K atoms.")
 
-  ### 4.5 Theta
-  #mu      <- linkinv(X %*% beta)                   # Updated for general link [uncomment if mu calc above gone]
-  # [DEBUG]
-  #message("spt:", spt)
-  #message(paste0("f0:", f0))
-  #message(cat("beta=", beta))
-  #for(i in seq_along(mu)){cat("mu[",i,"]= ",mu[i],"\n")}
-  #message(paste0("hi:", max(mu), "which hi:", which.max(mu)))
-  #message("any mu = 1?", any(mu==1))
-  #message(paste0("lo:", min(mu), "which lo:", which.min(mu)))
-
+  ### 4.4 Theta
+  mu      <- linkinv(X %*% beta)                   # Updated for general link
   out     <- tht_sol(spt, f0, mu, NULL)
   tht     <- out$tht
   btht    <- out$btht
   bpr2    <- out$bpr2
   f0_y    <- f0y(y, spt, f0)
 
+  n_acc <- 0 # Count number of acceptences
   ## 5. MCMC loop
   for (r in 2:iter) {
     ### 5.1 Beta update
@@ -194,7 +174,10 @@ bspgldrmFit <- function(formula, data, X, y,                # Data
     tht  <- b_out$cr_tht
     btht <- b_out$cr_btht
     bpr2 <- b_out$cr_bpr2
+    acc  <- b_out$acc
     mu   <- linkinv(X %*% beta)                   # Updated for general link
+
+    n_acc <- n_acc + as.integer(acc)              # Increment number of acceptances
 
     ### 5.2 f0 update
     propsl_dir_parm <- dir_parm(y, tht, btht, dir_pr_parm, ind_mt)
@@ -214,6 +197,10 @@ bspgldrmFit <- function(formula, data, X, y,                # Data
     }
   }
 
+  p_acc <- n_acc / iter # Proportion of acceptances
+  if (p_acc < 0.01) warning(paste0("Markov chain did not mix well.",
+                                   "Consider editing rho or increase total number of iterations"))
+
   ## 6. Tilt each f0 sample
   f0star_samples <- matrix(0, nrow = nrow(f0_samples), ncol = length(spt))
   for (iter in 1:nrow(f0_samples)) {
@@ -231,18 +218,14 @@ bspgldrmFit <- function(formula, data, X, y,                # Data
   }
   f0_samples     <- f0star_samples  # projected f0 samples
 
-  ## 7. Add NA values back into beta vector covariate matrix is not full rank
-  nBeta <- dim(beta_samples)[2] + sum(naID)
-  betaTemp <- matrix(NA, nrow=iter, ncol=nBeta)
-  betaTemp[, !naID] <- beta_samples
-  beta_samples <- betaTemp
-
-  ## 8. Output
+  ## 7. Output
   list(samples     = list(beta = beta_samples,
                           f0   = f0_samples),
        mb          = mb,
        sb          = sb,
        dir_pr_parm = dir_pr_parm,
        spt         = spt,
-       mu0         = mu0)
+       mu0         = mu0,
+       p_acc       = p_acc,
+       iter        = iter)
 }

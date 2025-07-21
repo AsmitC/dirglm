@@ -242,14 +242,17 @@ beta_update_joint <- function(X,
       cr_btht <- pr_btht
       cr_bpr2 <- pr_bpr2
       cr_Sig <- pr_Sig
+      acc <- TRUE
+    } else {
+      acc <- FALSE
     }
   }
   return(list(
     cr_bt = cr_bt,
     cr_tht = cr_tht,
     cr_btht = cr_btht,
-    cr_bpr2
-    = cr_bpr2
+    cr_bpr2 = cr_bpr2,
+    acc     = acc
   ))
 }
 
