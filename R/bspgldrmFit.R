@@ -199,7 +199,7 @@ bspgldrmFit <- function(formula, data, X, y,                # Data
 
   p_acc <- n_acc / iter # Proportion of acceptances
   if (p_acc < 0.01) warning(paste0("Markov chain did not mix well.",
-                                   "Consider editing rho or increase total number of iterations"))
+                                   "Consider editing rho or increasing the total number of iterations."))
 
   ## 6. Tilt each f0 sample
   f0star_samples <- matrix(0, nrow = nrow(f0_samples), ncol = length(spt))
