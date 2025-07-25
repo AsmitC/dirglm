@@ -56,6 +56,7 @@ bspgldrm.control <- function(burnin=100, thin=10, save=1000, rho=0.1, mu0=NULL, 
 bspgldrmFit <- function(formula, data, X, y,                # Data
                         link,                               # Link
                         mb, sb, dir_pr_parm,                # Priors
+                        mu0, spt, init,                     # Specs
                         bspgldrmControl, thetaControl)      # Controls
 {
   ## 1. Extract bspgldrmControl parameters
@@ -63,11 +64,7 @@ bspgldrmFit <- function(formula, data, X, y,                # Data
   thin         <- bspgldrmControl$thin
   save         <- bspgldrmControl$save
   rho          <- bspgldrmControl$rho
-  mu0          <- bspgldrmControl$mu0
-  spt          <- bspgldrmControl$spt
   joint.update <- bspgldrmControl$joint.update
-  betaStart    <- bspgldrmControl$betaStart
-  f0Start      <- bspgldrmControl$f0Start
   seed         <- bspgldrmControl$seed
 
   if (!is.null(seed)) set.seed(seed) # Set seed
@@ -77,47 +74,11 @@ bspgldrmFit <- function(formula, data, X, y,                # Data
   linkinv <- link$linkinv
   mu.eta  <- link$mu.eta
 
-  ## 2. Initialize (theoretical) support if not provided by the user
-  if (is.null(spt)) spt <- sort(unique(y)) ## Observed support
-  l <- length(spt)
-
-  ## 3. Initialize mu0 if not provided by the user
-  if (is.null(mu0)) mu0 <- mean(y)
-  else if (mu0 <= min(spt) || mu0 >= max(spt)) {
-    stop(paste0("mu0 must lie within the range of observed values. Choose a different ",
-                "value or set mu0=NULL to use the default value, mean(y)."))
-  }
-
   ## 4. MCMC Initialization
-
-  ### 4.1 beta
-  if (is.null(betaStart)) {
-    gfit <- gldrm(formula      = formula,
-                  data         = data,
-                  link         = link,
-                  mu0          = mu0,
-                  thetaControl = thetaControl)
-    betaStart <- gfit$beta
-  }
-
-  ### 4.2 f0
-  if (is.null(f0Start)) {
-    f0      <- rep(1 / l, l)
-    tht0    <- gldrm:::getTheta(
-      spt       = spt,
-      f0        = f0,
-      mu        = mu0,
-      sampprobs = NULL,
-      ySptIndex = NULL
-    )$theta
-    f0star  <- (f0 * exp(tht0 * spt)) %>% `/` (sum(.))
-    f0Start <- f0star
-  }
-
-  init <- list(beta = betaStart, f0 = f0Start)
-  X    <- as.matrix(X)
   n    <- length(y)
+  X    <- as.matrix(X, nrow=n)
   p    <- ncol(X)
+  l    <- length(spt)
   iter <- burnin + thin * save
 
   beta_samples <- matrix(NA, nrow = save, ncol = p)
@@ -156,7 +117,9 @@ bspgldrmFit <- function(formula, data, X, y,                # Data
   bpr2    <- out$bpr2
   f0_y    <- f0y(y, spt, f0)
 
-  n_acc <- 0 # Count number of acceptences
+  # Count number of acceptences
+  n_acc_beta <- 0
+  n_acc_f0   <- 0
   ## 5. MCMC loop
   for (r in 2:iter) {
     ### 5.1 Beta update
@@ -170,24 +133,29 @@ bspgldrmFit <- function(formula, data, X, y,                # Data
                                      bpr2, btht, rho, linkfun, linkinv,
                                      mu.eta, mb, sb)
     }
-    beta <- b_out$cr_bt
-    tht  <- b_out$cr_tht
-    btht <- b_out$cr_btht
-    bpr2 <- b_out$cr_bpr2
-    acc  <- b_out$acc
-    mu   <- linkinv(X %*% beta)                   # Updated for general link
+    beta      <- b_out$cr_bt
+    tht       <- b_out$cr_tht
+    btht      <- b_out$cr_btht
+    bpr2      <- b_out$cr_bpr2
+    acc_beta  <- b_out$acc_beta
+    mu        <- linkinv(X %*% beta)                   # Updated for general link
 
-    n_acc <- n_acc + as.integer(acc)              # Increment number of acceptances
+    # Increment number of acceptances (beta)
+    n_acc_beta <- n_acc_beta + as.integer(acc_beta)
 
     ### 5.2 f0 update
     propsl_dir_parm <- dir_parm(y, tht, btht, dir_pr_parm, ind_mt)
     out             <- f0_update(y, spt, f0, f0_y, propsl_dir_parm,
                                  mu, tht, bpr2, btht, dir_pr_parm, ind_mt)
-    f0    <- out$cr_f0
-    f0_y  <- out$cr_f0y
-    tht   <- out$cr_tht
-    btht  <- out$cr_btht
-    bpr2  <- out$cr_bpr2
+    f0     <- out$cr_f0
+    f0_y   <- out$cr_f0y
+    tht    <- out$cr_tht
+    btht   <- out$cr_btht
+    bpr2   <- out$cr_bpr2
+    acc_f0 <- out$acc_f0
+
+    # Increment number of acceptances (f0)
+    n_acc_f0 <- n_acc_f0 + as.integer(acc_f0)
 
     # 5.3 Storage
     if (r > burnin & r %% thin == 0) {
@@ -197,9 +165,11 @@ bspgldrmFit <- function(formula, data, X, y,                # Data
     }
   }
 
-  p_acc <- n_acc / iter # Proportion of acceptances
-  if (p_acc < 0.01) warning(paste0("Markov chain did not mix well.",
-                                   "Consider editing rho or increasing the total number of iterations."))
+  # Calculate proportion of acceptances
+  p_acc_beta <- n_acc_beta / iter
+  p_acc_f0   <- n_acc_f0 / iter
+  if (p_acc_beta < 0.01 || p_acc_f0 < 0.01) warning(paste0("Markov chain did not mix well. ",
+                                                           "Consider editing rho or increasing the total number of iterations."))
 
   ## 6. Tilt each f0 sample
   f0star_samples <- matrix(0, nrow = nrow(f0_samples), ncol = length(spt))
@@ -221,11 +191,12 @@ bspgldrmFit <- function(formula, data, X, y,                # Data
   ## 7. Output
   list(samples     = list(beta = beta_samples,
                           f0   = f0_samples),
-       mb          = mb,
-       sb          = sb,
-       dir_pr_parm = dir_pr_parm,
-       spt         = spt,
-       mu0         = mu0,
-       p_acc       = p_acc,
-       iter        = iter)
+       mb                = mb,
+       sb                = sb,
+       dir_pr_parm       = dir_pr_parm,
+       spt               = spt,
+       mu0               = mu0,
+       p_acc_beta        = p_acc_beta,
+       p_acc_f0          = p_acc_f0,
+       iter              = iter)
 }

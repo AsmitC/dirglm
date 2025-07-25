@@ -149,21 +149,27 @@ f0_update <- function(y,
       alp <- min(0, (pr_llik - cr_llik + pr_pf0 - cr_pf0 + cr_qf0 - pr_qf0))
 
       if (log(runif(1)) < alp) {
-        cr_f0 <- pr_f0
-        cr_tht <- pr_tht
+        cr_f0   <- pr_f0
+        cr_tht  <- pr_tht
         cr_btht <- pr_btht
-        cr_f0y <- pr_f0y
+        cr_f0y  <- pr_f0y
         cr_bpr2 <- pr_bpr2
+        acc_f0  <- TRUE
+      } else {
+        acc_f0 <- FALSE
       }
+    } else {
+      acc_f0 <- TRUE
     }
   }
   return(
     list(
-      cr_f0 = cr_f0,
-      cr_f0y = cr_f0y,
-      cr_tht = cr_tht,
+      cr_f0   = cr_f0,
+      cr_f0y  = cr_f0y,
+      cr_tht  = cr_tht,
       cr_btht = cr_btht,
-      cr_bpr2 = cr_bpr2
+      cr_bpr2 = cr_bpr2,
+      acc_f0  = acc_f0
     )
   )
 }
@@ -242,17 +248,17 @@ beta_update_joint <- function(X,
       cr_btht <- pr_btht
       cr_bpr2 <- pr_bpr2
       cr_Sig <- pr_Sig
-      acc <- TRUE
+      acc_beta <- TRUE
     } else {
-      acc <- FALSE
+      acc_beta <- FALSE
     }
   }
   return(list(
-    cr_bt = cr_bt,
-    cr_tht = cr_tht,
-    cr_btht = cr_btht,
-    cr_bpr2 = cr_bpr2,
-    acc     = acc
+    cr_bt    = cr_bt,
+    cr_tht   = cr_tht,
+    cr_btht  = cr_btht,
+    cr_bpr2  = cr_bpr2,
+    acc_beta = acc_beta
   ))
 }
 
@@ -330,17 +336,21 @@ beta_update_separate <- function(X,
       alp <- min(0, pr_llik - cr_llik + pr_pbt - cr_pbt + cr_qbt - pr_qbt)
 
       if (log(runif(1)) < alp) {
-        cr_bt <- pr_bt
-        cr_tht <- pr_tht
-        cr_btht <- pr_btht
-        cr_bpr2 <- pr_bpr2
+        cr_bt    <- pr_bt
+        cr_tht   <- pr_tht
+        cr_btht  <- pr_btht
+        cr_bpr2  <- pr_bpr2
+        acc_beta <- TRUE
+      } else {
+        acc_beta <- FALSE
       }
     }
   }
   return(list(
-    cr_bt   = cr_bt,
-    cr_tht  = cr_tht,
-    cr_btht = cr_btht,
-    cr_bpr2 = cr_bpr2
+    cr_bt    = cr_bt,
+    cr_tht   = cr_tht,
+    cr_btht  = cr_btht,
+    cr_bpr2  = cr_bpr2,
+    acc_beta = acc_beta
   ))
 }

@@ -48,8 +48,9 @@
 #' Otherwise, it will be the list of three functions passed to the \code{link} argument.
 #' \item \code{spt} Support, \eqn{\{s_j, \ j = 1, 2, ..., l\}}, of response variable \code{y}.
 #' \item \code{mu0} Mean of the reference distribution \code{f0}.
-#' \item \code{p_acc} Proportion of accepted proposals during MCMC.
 #' \item \code{iter} The total number of MCMC iterations.
+#' \item \code{p_acc_beta} Proportion of accepted proposals for beta during MCMC.
+#' \item \code{p_acc_f0} Proportion of accepted proposals for f0 during MCMC.
 #' }
 #'
 #' @examples
@@ -112,21 +113,66 @@ bspgldrm <- function(formula, data=NULL, link="log", mb=NULL, sb=NULL, dir_pr_pa
         !is.vectorized(mu.eta, inveta.testdata)) stop("link must be vectorized.")
   }
 
-  ## 3. Fit
+  ## 3. Initialize (theoretical) support if not provided by the user
+  spt <- bspgldrmControl$spt
+  if (is.null(spt)) spt <- sort(unique(y)) ## Observed support
+  l <- length(spt)
+
+  ## 4. Initialize mu0 if not provided by the user
+  mu0 <- bspgldrmControl$mu0
+  if (is.null(mu0)) mu0 <- mean(y)
+  else if (mu0 <= min(spt) || mu0 >= max(spt)) {
+    stop(paste0("mu0 must lie within the range of observed values. Choose a different ",
+                "value or set mu0=NULL to use the default value, mean(y)."))
+  }
+
+  ## 5. MCMC Initialization
+  betaStart    <- bspgldrmControl$betaStart
+  f0Start      <- bspgldrmControl$f0Start
+
+  ### 5.1 beta
+  if (is.null(betaStart)) {
+    gfit <- gldrm(formula      = formula,
+                  data         = data,
+                  link         = link,
+                  mu0          = mu0,
+                  thetaControl = thetaControl)
+    betaStart <- gfit$beta
+  }
+
+  ### 5.2 f0
+  if (is.null(f0Start)) {
+    f0      <- rep(1 / l, l)
+    tht0    <- gldrm:::getTheta(
+      spt       = spt,
+      f0        = f0,
+      mu        = mu0,
+      sampprobs = NULL,
+      ySptIndex = NULL
+    )$theta
+    f0star  <- (f0 * exp(tht0 * spt)) %>% `/` (sum(.))
+    f0Start <- f0star
+  }
+
+  init <- list(beta = betaStart, f0 = f0Start)
+
+  ## 4. Fit
   fit <- bspgldrmFit(
     formula              = formula,
-    data                 = data,
     X                    = X,
     y                    = y,
     link                 = link,
     mb                   = mb,
     sb                   = sb,
     dir_pr_parm          = dir_pr_parm,
+    mu0                  = mu0,
+    spt                  = spt,
+    init                 = init,
     bspgldrmControl      = bspgldrmControl,
     thetaControl         = thetaControl
   )
 
-  ## 4. Output
+  ## 5. Output
   out <- list(
     samples     = fit$samples,
     mb          = fit$mb,
@@ -137,8 +183,9 @@ bspgldrm <- function(formula, data=NULL, link="log", mb=NULL, sb=NULL, dir_pr_pa
     link        = link,
     spt         = fit$spt,
     mu0         = fit$mu0,
-    p_acc       = fit$p_acc,
-    iter        = fit$iter
+    iter        = fit$iter,
+    p_acc_beta  = fit$p_acc_beta,
+    p_acc_f0    = fit$p_acc_f0
   )
   class(out) <- "bspgldrm"
   out
