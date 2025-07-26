@@ -1,6 +1,6 @@
-#' Control arguments for the \code{bspgldrm} algorithm.
+#' Control arguments for the \code{dirglm} algorithm.
 #'
-#' This function returns control arguments for the \code{bspgldrm} algorithm.
+#' This function returns control arguments for the \code{dirglm} algorithm.
 #' Each argument has a default value, which will be used unless a different
 #' value is provided by the user.
 #'
@@ -22,10 +22,10 @@
 #' Defaults to \code{TRUE}.
 #' @param seed Random seed. Defaults to NULL.
 #'
-#' @return Object of S3 class "bspgldrmControl"
+#' @return Object of S3 class "dirglmControl"
 #'
 #' @export
-bspgldrm.control <- function(burnin=100, thin=10, save=1000, rho=0.1, mu0=NULL, spt=NULL,
+dirglm.control <- function(burnin=100, thin=10, save=1000, rho=0.1, mu0=NULL, spt=NULL,
                              betaStart=NULL, f0Start=NULL, joint.update=TRUE, seed=NULL)
 {
   if (burnin < 0 || floor(burnin) != burnin) stop("Number of burn-in samples must be an integer >= 0")
@@ -44,28 +44,28 @@ bspgldrm.control <- function(burnin=100, thin=10, save=1000, rho=0.1, mu0=NULL, 
                f0Start      = f0Start,
                joint.update = joint.update,
                seed         = seed)
-  class(ctrl) <- "bspgldrmControl"
+  class(ctrl) <- "dirglmControl"
   ctrl
 }
 
 #' Main MCMC function
 #'
-#' This function is called by the main \code{bspgldrm} function.
+#' This function is called by the main \code{dirglm} function.
 #'
 #' @keywords internal
-bspgldrmFit <- function(formula, data, X, y,                # Data
-                        link,                               # Link
-                        mb, sb, dir_pr_parm,                # Priors
-                        mu0, spt, init,                     # Specs
-                        bspgldrmControl, thetaControl)      # Controls
+dirglmFit <- function(formula, data, X, y,                # Data
+                      link,                               # Link
+                      mb, sb, dir_pr_parm,                # Priors
+                      mu0, spt, init,                     # Specs
+                      dirglmControl, thetaControl)        # Controls
 {
-  ## 1. Extract bspgldrmControl parameters
-  burnin       <- bspgldrmControl$burnin
-  thin         <- bspgldrmControl$thin
-  save         <- bspgldrmControl$save
-  rho          <- bspgldrmControl$rho
-  joint.update <- bspgldrmControl$joint.update
-  seed         <- bspgldrmControl$seed
+  ## 1. Extract dirglmControl parameters
+  burnin       <- dirglmControl$burnin
+  thin         <- dirglmControl$thin
+  save         <- dirglmControl$save
+  rho          <- dirglmControl$rho
+  joint.update <- dirglmControl$joint.update
+  seed         <- dirglmControl$seed
 
   if (!is.null(seed)) set.seed(seed) # Set seed
 

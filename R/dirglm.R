@@ -20,22 +20,22 @@
 #' @param dir_pr_parm Dirichlet prior parameter for f0. Defaults to the observed
 #' response frequency distribution. If specified, it should be a p-length vector
 #' with positive entries.
-#' @param bspgldrmControl Optional control arguments.
-#' Passed as an object of class "bspgldrmControl", which is constructed by the
-#' \code{bspgldrm.control} function.
-#' See \code{bspgldrm.control} documentation for details.
+#' @param dirglmControl Optional control arguments.
+#' Passed as an object of class "dirglmControl", which is constructed by the
+#' \code{dirglm.control} function.
+#' See \code{dirglm.control} documentation for details.
 #' @param thetaControl Optional control arguments for the theta update procedure.
 #' Passed as an object of class "thetaControl", which is constructed by the
 #' \code{theta.control} function.
 #' See \code{theta.control} documentation for details.
 #'
-#' @return An S3 object of class "bspgldrm". See details.
+#' @return An S3 object of class "dirglm". See details.
 #'
 #' @details The arguments \code{linkfun}, \code{linkinv}, and \code{mu.eta}
 #' mirror the "link-glm" class. Objects of this class can be created with the
 #' \code{stats::make.link} function.
 #'
-#'The "bspgldrm" class is a list of the following items.
+#'The "dirglm" class is a list of the following items.
 #' \itemize{
 #' \item \code{samples} A list containing the MCMC samples for \code{f0} and \code{beta}.
 #' \item \code{mb} Prior mean for \code{beta}.
@@ -56,23 +56,23 @@
 #' @examples
 #' data(iris, package="datasets")
 #'
-#' # Fit a bspgldrm with log link
-#' fit <- bspgldrm(Sepal.Length ~ Sepal.Width + Petal.Length + Petal.Width + Species,
+#' # Fit a dirglm with log link
+#' fit <- dirglm(Sepal.Length ~ Sepal.Width + Petal.Length + Petal.Width + Species,
 #'                 data=iris)
 #' fit
 #'
-#' # Fit a bspgldrm with custom link function
+#' # Fit a dirglm with custom link function
 #' link <- list()
 #' link$linkfun <- function(mu) log(mu)^3
 #' link$linkinv <- function(eta) exp(eta^(1/3))
 #' link$mu.eta <- function(eta) exp(eta^(1/3)) * 1/3 * eta^(-2/3)
-#' fit2 <- bspgldrm(Sepal.Length ~ Sepal.Width + Petal.Length + Petal.Width + Species,
+#' fit2 <- dirglm(Sepal.Length ~ Sepal.Width + Petal.Length + Petal.Width + Species,
 #'                  data=iris, link=link)
 #' fit2
 #'
 #' @export
-bspgldrm <- function(formula, data=NULL, link="log", mb=NULL, sb=NULL, dir_pr_parm=NULL,
-                     bspgldrmControl=bspgldrm.control(), thetaControl=theta.control())
+dirglm <- function(formula, data=NULL, link="log", mb=NULL, sb=NULL, dir_pr_parm=NULL,
+                     dirglmControl=dirglm.control(), thetaControl=theta.control())
 
 {
   ## 1. Model initialization
@@ -114,12 +114,12 @@ bspgldrm <- function(formula, data=NULL, link="log", mb=NULL, sb=NULL, dir_pr_pa
   }
 
   ## 3. Initialize (theoretical) support if not provided by the user
-  spt <- bspgldrmControl$spt
+  spt <- dirglmControl$spt
   if (is.null(spt)) spt <- sort(unique(y)) ## Observed support
   l <- length(spt)
 
   ## 4. Initialize mu0 if not provided by the user
-  mu0 <- bspgldrmControl$mu0
+  mu0 <- dirglmControl$mu0
   if (is.null(mu0)) mu0 <- mean(y)
   else if (mu0 <= min(spt) || mu0 >= max(spt)) {
     stop(paste0("mu0 must lie within the range of observed values. Choose a different ",
@@ -127,8 +127,8 @@ bspgldrm <- function(formula, data=NULL, link="log", mb=NULL, sb=NULL, dir_pr_pa
   }
 
   ## 5. MCMC Initialization
-  betaStart    <- bspgldrmControl$betaStart
-  f0Start      <- bspgldrmControl$f0Start
+  betaStart    <- dirglmControl$betaStart
+  f0Start      <- dirglmControl$f0Start
 
   ### 5.1 beta
   if (is.null(betaStart)) {
@@ -163,7 +163,7 @@ bspgldrm <- function(formula, data=NULL, link="log", mb=NULL, sb=NULL, dir_pr_pa
   init <- list(beta = betaStart, f0 = f0Start)
 
   ## 4. Fit
-  fit <- bspgldrmFit(
+  fit <- dirglmFit(
     formula              = formula,
     X                    = X,
     y                    = y,
@@ -174,7 +174,7 @@ bspgldrm <- function(formula, data=NULL, link="log", mb=NULL, sb=NULL, dir_pr_pa
     mu0                  = mu0,
     spt                  = spt,
     init                 = init,
-    bspgldrmControl      = bspgldrmControl,
+    dirglmControl        = dirglmControl,
     thetaControl         = thetaControl
   )
 
@@ -193,6 +193,6 @@ bspgldrm <- function(formula, data=NULL, link="log", mb=NULL, sb=NULL, dir_pr_pa
     p_acc_beta  = fit$p_acc_beta,
     p_acc_f0    = fit$p_acc_f0
   )
-  class(out) <- "bspgldrm"
+  class(out) <- "dirglm"
   out
 }
