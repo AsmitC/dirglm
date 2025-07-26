@@ -1,4 +1,4 @@
-Package: dir_glm
+Package: dirglm
 Title: Fits a DirGLM Model.
 Version: 0.0.0.9000
 Authors@R: 
