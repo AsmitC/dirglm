@@ -14,7 +14,7 @@ knitr::opts_chunk$set(
 )
 ```
 
-Here, we will provide a few simulation examples for the`bspgldrm` function. Each function named `sim_dat_X` generates a data set corresponding to different instances of $\beta$, $f_0$, the link function, or some combination of those three. In what follows, each code section generates a data set from 
+Here, we will provide a few simulation examples for the `dirglm` function. Each function named `sim_dat_X` generates a data set corresponding to different instances of $\beta$, $f_0$, the link function, or some combination of those three. In what follows, each code section generates a data set from 
 
 # Data-Generating Functions
 ```{r}
@@ -139,7 +139,7 @@ sim_dat_4 <- function(n, p, seed=100) {
 spt <- 0:5
 mu0 <- 1
 data <- sim_dat_1(n = 500, p = 2)
-dir_glm.fit <- bspgldrm(y ~ X2, data=data, bspgldrmControl=bspgldrm.control(mu0=mu0, spt=spt))
+dir_glm.fit <- dirglm(y ~ X2, data=data, dirglmControl=dirglm.control(mu0=mu0, spt=spt))
 beta_samples <- dir_glm.fit$samples$beta
 f0_samples <- dir_glm.fit$samples$f0
 colMeans(beta_samples)        # true beta is c(-0.7, 0.2)
@@ -152,7 +152,7 @@ colMeans(f0_samples)          # true f0 is truncated Poisson = (0.368, 0.368, 0.
 spt <- 0:5
 mu0 <- 1
 data <- sim_dat_2(n = 500, p = 2)
-dir_glm.fit <- bspgldrm(y ~ X2, data=data, bspgldrmControl=bspgldrm.control(mu0=mu0, spt=spt))
+dir_glm.fit <- dirglm(y ~ X2, data=data, dirglmControl=dirglm.control(mu0=mu0, spt=spt))
 beta_samples <- dir_glm.fit$samples$beta
 f0_samples <- dir_glm.fit$samples$f0
 colMeans(beta_samples)        # true beta is c(-0.7, 0.2)
@@ -172,8 +172,8 @@ link <- list(
   mu.eta  <- function(eta) 5 * plogis(eta) * (1 - plogis(eta))
 )
 names(link) <- c("linkfun", "linkinv", "mu.eta")
-dir_glm.fit <- bspgldrm(y ~ X2 + X3, data=data, link=link,
-                        bspgldrmControl=bspgldrm.control(mu0=mu0, spt=spt))
+dir_glm.fit <- dirglm(y ~ X2 + X3, data=data, link=link,
+                      dirglmControl=dirglm.control(mu0=mu0, spt=spt))
 beta_samples <- dir_glm.fit$samples$beta
 f0_samples <- dir_glm.fit$samples$f0
 colMeans(beta_samples)        # true beta is c(-1, 1)
@@ -186,56 +186,10 @@ colMeans(f0_samples)          # true f0 is binomial = (0.031, 0.156, 0.313, 0.31
 spt <- 0:10
 mu0 <- 5
 data <- sim_dat_4(n = 500, p = 5)
-dir_glm.fit <- bspgldrm(y ~ X2 + X3 + X4 + X5, data=data, link="identity",
-                        bspgldrmControl=bspgldrm.control(mu0=mu0, spt=spt))
+dir_glm.fit <- dirglm(y ~ X2 + X3 + X4 + X5, data=data, link="identity",
+                        dirglmControl=dirglm.control(mu0=mu0, spt=spt))
 beta_samples <- dir_glm.fit$samples$beta
 f0_samples <- dir_glm.fit$samples$f0
 colMeans(beta_samples)        # true beta is c(5, 2)
 colMeans(f0_samples)          # true f0 is uniform = (0.1, 0.1, 0.1, ..., 0.1)
-```
-
-
-```{r}
-simData <- function(n, p, betaMax, link, ySim) {
-  beta <- c(0, seq(-betaMax, betaMax, length.out = p))
-  X    <- cbind(1, matrix(rnorm(n * p), nrow = n))
-  colnames(X) <- paste0("X", seq_len(ncol(X)))
-  eta  <- as.vector(X %*% beta)
-  mu   <- link$linkinv(eta)
-  y    <- ySim(n, mu)
-  list(x = X, y = y, eta = eta, mu = mu, beta = beta)
-}
-
-set.seed(100)
-ySim <- function(n, mu) rpois(n, 1)
-lf <- stats::make.link("identity")
-sim <- simData(n=100, p=0, betaMax=0, link=lf, ySim=ySim)
-data <- data.frame(sim$x, y=sim$y)
-
-m1 <- as.vector(table(data$y)) / length(data$y)
-m2 <- bspgldrm(y ~ X1 - 1, data=data, link="identity",
-               bspgldrmControl=bspgldrm:::bspgldrm.control(burnin=1000,
-                                                           thin=20,
-                                                           save=10000))  # link function doesn't matter with no covariates
-
-# Compare beta to mean(y)
-tol        <- 0.1 * abs(beta_truth)
-gamma      <- 0.95
-iter       <- m2$iter
-beta_truth <- mean(data$y)
-beta_model <- m2$samples$beta
-L          <- beta_truth - tol
-U          <- beta_truth + tol
-cov_beta   <- sum( (L <= beta_model) & (beta_model <= U) ) / iter
-cat(paste0("beta ", cov_beta, "\n"))
-
-tol     <- 0.1 * abs(f0_truth)
-f0_truth <- m1
-f0_model <- m2$samples$f0
-L        <- f0_truth - tol
-U        <- f0_truth + tol
-for (i in seq_along(f0_truth)) {
-  cov_f0i <- sum( (L[i] <= f0_model[, i]) & (f0_model[, i] <= U[i]) ) / iter
-  cat(paste0("f0 ", cov_f0i))
-}
 ```
