@@ -13,6 +13,9 @@ bspgldrmFit(
   mb,
   sb,
   dir_pr_parm,
+  mu0,
+  spt,
+  init,
   bspgldrmControl,
   thetaControl
 )

@@ -72,8 +72,9 @@ The "bspgldrm" class is a list of the following items.
 Otherwise, it will be the list of three functions passed to the \code{link} argument.
 \item \code{spt} Support, \eqn{\{s_j, \ j = 1, 2, ..., l\}}, of response variable \code{y}.
 \item \code{mu0} Mean of the reference distribution \code{f0}.
-\item \code{p_acc} Proportion of accepted proposals during MCMC.
 \item \code{iter} The total number of MCMC iterations.
+\item \code{p_acc_beta} Proportion of accepted proposals for beta during MCMC.
+\item \code{p_acc_f0} Proportion of accepted proposals for f0 during MCMC.
 }
 }
 \examples{
