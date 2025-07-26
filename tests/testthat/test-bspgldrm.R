@@ -48,34 +48,11 @@ test_that("bspgldrm matches intercept-only (empirical distribution) model", {
   m2 <- bspgldrm(y ~ X1 - 1, data=data, link="identity",
                  bspgldrmControl=bspgldrm:::bspgldrm.control(save=10000))  # link function doesn't matter with no covariates
 
-  # Compare beta to mean(y)
-  tol        <- 0.1
-  gamma      <- 0.95
-  iter       <- m2$iter
-  beta_truth <- mean(data$y)
-  beta_model <- m2$samples$beta
-  L          <- beta_truth - tol
-  U          <- beta_truth + tol
-  cov_beta   <- sum( (L <= beta_model) & (beta_model <= U) ) / iter
-  expect_gt(cov_beta, gamma)
-
-  # Compare f0 to response frequency table
-  tols     <- c(0.1, 0.1, 0.05, 0.01, 0.005)
-  f0_truth <- m1
-  f0_model <- m2$samples$f0
-  L        <- f0_truth - tols
-  U        <- f0_truth + tols
-  for (i in seq_along(f0_truth)) {
-    cov_f0i <- sum( (L[i] <= f0_model[, i]) & (f0_model[, i] <= U[i]) ) / iter
-    expect_gt(cov_f0i, gamma)
-  }
-
-
   ## this is an intercept-only model, so all observations have fitted mean equal to mean(y)
-  #expect_equal(mean(data$y), mean(m2$samples$beta), # Compare to posterior mean
-               #tolerance=1e-2, ignore_attr=TRUE)
+  expect_equal(mean(data$y), mean(m2$samples$beta), # Compare to posterior mean
+               tolerance=1e-2, ignore_attr=TRUE)
   ## f0 should match response frequency table
-  #expect_equal(m1, colMeans(m2$samples$f0), tolerance=1e-2) # Compare to posterior mean
+  expect_equal(m1, colMeans(m2$samples$f0), tolerance=1e-2) # Compare to posterior mean
 })
 
 test_that("bspgldrm matches logistic regression", {
