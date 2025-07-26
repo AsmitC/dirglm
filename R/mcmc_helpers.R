@@ -44,7 +44,8 @@ tht_sol <- function(spt, f0, mu, thtst) {
 #' @keywords internal
 
 dir_parm <- function(y, tht, btht, dir_pr_parm, ind_mt) {
-  wgt <- (1 / exp(tht * y - btht)) %>% `/` (sum(.)) %>% as.numeric()
+  wgt  <- (1 / exp(tht * y - btht)) / sum(1 / exp(tht * y - btht))
+  wgt  <- as.numeric(wgt)
   parm <- dir_pr_parm + colSums(ind_mt * wgt)
 
   return(parm)
@@ -210,8 +211,7 @@ beta_update_joint <- function(X,
   n <- dim(X)[1]
   l <- length(spt)
 
-  pr_bt <- mvtnorm::rmvnorm(1, mean = cr_bt, sigma = cr_Sig) %>% as.vector()
-  # pr_mu <- exp(X %*% pr_bt) %>% as.numeric()       # due to log link: g^{-1}(y) = exp(y)
+  pr_bt <- as.vector(mvtnorm::rmvnorm(1, mean = cr_bt, sigma = cr_Sig))
   pr_mu <- as.numeric(linkinv(X %*% pr_bt))          # Updated for general link
 
   if (sum(spt[1] <= pr_mu & pr_mu <= spt[l]) == n) {
@@ -303,7 +303,6 @@ beta_update_separate <- function(X,
     cr_sd <- sqrt(diag(cr_Sig))
     pr_bt <- cr_bt
     pr_bt[j] <- cr_bt[j] + rnorm(1, mean = 0, sd = cr_sd[j])
-    # pr_mu <- exp(X %*% pr_bt) %>% as.numeric()     # due to log link: g^{-1}(y) = exp(y)
     pr_mu <- as.numeric(linkinv(X %*% pr_bt))        # Updated for general link
 
     if (sum(spt[1] <= pr_mu & pr_mu <= spt[l]) == n) {

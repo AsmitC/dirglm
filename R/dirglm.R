@@ -156,7 +156,7 @@ dirglm <- function(formula, data=NULL, link="log", mb=NULL, sb=NULL, dir_pr_parm
       sampprobs = NULL,
       ySptIndex = NULL
     )$theta
-    f0star  <- (f0 * exp(tht0 * spt)) %>% `/` (sum(.))
+    f0star  <- (f0 * exp(tht0 * spt)) / sum(f0 * exp(tht0 * spt))
     f0Start <- f0star
   }
 

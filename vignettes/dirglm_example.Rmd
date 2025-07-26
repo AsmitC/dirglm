@@ -1,13 +1,14 @@
 ---
-title: "bspgldrm_example"
+title: "dirglm_example"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{bspgldrm_example}
+  %\VignetteIndexEntry{dirglm_example}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
 
 ```{r, include = FALSE}
+library(dirglm)
 knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>"
