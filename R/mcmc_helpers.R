@@ -144,10 +144,10 @@ f0_update <- function(y,
       pr_llik <- sum(pr_tht * y - pr_btht + log(pr_f0y))
       cr_llik <- sum(cr_tht * y - cr_btht + log(cr_f0y))
 
-      pr_pf0 <- ddirichlet(pr_f0, dir_pr_parm, log = T)                   # prior probability (proposal)
-      cr_pf0 <- ddirichlet(cr_f0, dir_pr_parm, log = T)                   # prior probability (current)
-      cr_qf0 <- ddirichlet(cr_f0, pr_dir_parm, log = T)
-      pr_qf0 <- ddirichlet(pr_f0, cr_dir_parm, log = T)
+      pr_pf0 <- extraDistr::ddirichlet(pr_f0, dir_pr_parm, log = T)                   # prior probability (proposal)
+      cr_pf0 <- extraDistr::ddirichlet(cr_f0, dir_pr_parm, log = T)                   # prior probability (current)
+      cr_qf0 <- extraDistr::ddirichlet(cr_f0, pr_dir_parm, log = T)
+      pr_qf0 <- extraDistr::ddirichlet(pr_f0, cr_dir_parm, log = T)
 
       alp <- min(0, (pr_llik - cr_llik + pr_pf0 - cr_pf0 + cr_qf0 - pr_qf0))
 

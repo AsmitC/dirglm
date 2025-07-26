@@ -82,7 +82,7 @@ data(iris, package="datasets")
 
 # Fit a dirglm with log link
 fit <- dirglm(Sepal.Length ~ Sepal.Width + Petal.Length + Petal.Width + Species,
-                data=iris)
+              data=iris)
 fit
 
 # Fit a dirglm with custom link function
@@ -91,7 +91,7 @@ link$linkfun <- function(mu) log(mu)^3
 link$linkinv <- function(eta) exp(eta^(1/3))
 link$mu.eta <- function(eta) exp(eta^(1/3)) * 1/3 * eta^(-2/3)
 fit2 <- dirglm(Sepal.Length ~ Sepal.Width + Petal.Length + Petal.Width + Species,
-                 data=iris, link=link)
+               data=iris, link=link)
 fit2
 
 }
