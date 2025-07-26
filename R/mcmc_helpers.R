@@ -113,6 +113,7 @@ Sigma_beta <- function(X, mu, bpr2, rho, linkfun, mu.eta) {
 #' @param dir_pr_parm dirichlet prior parameter
 #' @param ind_mt indicator matrix with (i,j)th element: 1(y_i == s_j)
 #'
+#' @importFrom extraDistr ddirichlet
 #' @keywords internal
 f0_update <- function(y,
                       spt,
