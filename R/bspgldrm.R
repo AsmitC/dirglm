@@ -138,6 +138,12 @@ bspgldrm <- function(formula, data=NULL, link="log", mb=NULL, sb=NULL, dir_pr_pa
                   mu0          = mu0,
                   thetaControl = thetaControl)
     betaStart <- gfit$beta
+
+    # If gldrm fails, use a glm
+    #if (any(is.na(betaStart))) {
+      #gfit <- glm(formula      = formula,
+                  #data         = data )
+    #}
   }
 
   ### 5.2 f0

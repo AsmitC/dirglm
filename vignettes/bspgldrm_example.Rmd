@@ -196,40 +196,46 @@ colMeans(f0_samples)          # true f0 is uniform = (0.1, 0.1, 0.1, ..., 0.1)
 
 
 ```{r}
-# muHat on boundary of spt
+simData <- function(n, p, betaMax, link, ySim) {
+  beta <- c(0, seq(-betaMax, betaMax, length.out = p))
+  X    <- cbind(1, matrix(rnorm(n * p), nrow = n))
+  colnames(X) <- paste0("X", seq_len(ncol(X)))
+  eta  <- as.vector(X %*% beta)
+  mu   <- link$linkinv(eta)
+  y    <- ySim(n, mu)
+  list(x = X, y = y, eta = eta, mu = mu, beta = beta)
+}
+
 set.seed(100)
-# Note: without intercept, expect mu = y i.e., beta = c(0, 1)
-# but getTheta fails via floating point issue I think.
-# Not sure how gldrm is getting past that
-n <- 10
-y <- rep(c(0, 1), each=n/2)
-x <- cbind(1, y)
+ySim <- function(n, mu) rpois(n, 1)
+lf <- stats::make.link("identity")
+sim <- simData(n=100, p=0, betaMax=0, link=lf, ySim=ySim)
+data <- data.frame(sim$x, y=sim$y)
 
-#m1 <- gldrm(y~x-1, data=NULL, link="identity")
-m1 <- bspgldrm(y ~ x - 1, data=NULL, link="identity")
-traceback()
-```
+m1 <- as.vector(table(data$y)) / length(data$y)
+m2 <- bspgldrm(y ~ X1 - 1, data=data, link="identity",
+               bspgldrmControl=bspgldrm:::bspgldrm.control(burnin=1000,
+                                                           thin=20,
+                                                           save=10000))  # link function doesn't matter with no covariates
 
-```{r}
-gldrm:::getTheta(
-     spt = c(0, 1),
-     f0 = c(0.5, 0.5),
-     mu = c(rep(-2.77555756156289e-17, 5), rep(1, 5)),
-     sampprobs = NULL,
-     ySptIndex = NULL,
-     thetaStart = NULL
-)
-```
+# Compare beta to mean(y)
+tol        <- 0.1 * abs(beta_truth)
+gamma      <- 0.95
+iter       <- m2$iter
+beta_truth <- mean(data$y)
+beta_model <- m2$samples$beta
+L          <- beta_truth - tol
+U          <- beta_truth + tol
+cov_beta   <- sum( (L <= beta_model) & (beta_model <= U) ) / iter
+cat(paste0("beta ", cov_beta, "\n"))
 
-```{r}
-# Singular covariate matrix
-n <- 10
-y <- rep(c(0, 1), each=n/2)
-x <- matrix(1, nrow=n, ncol=2)
-
-m1 <- bspgldrm(y ~ x - 1, data=NULL, link="identity")
-m2 <- bspgldrm(y ~ x - 1, data=NULL, link="logit")
-
-colMeans(m1$samples$beta) # Expect c(0.5, NA)
-colmeans(m2$samples$beta) # Expect c(0, NA)
+tol     <- 0.1 * abs(f0_truth)
+f0_truth <- m1
+f0_model <- m2$samples$f0
+L        <- f0_truth - tol
+U        <- f0_truth + tol
+for (i in seq_along(f0_truth)) {
+  cov_f0i <- sum( (L[i] <= f0_model[, i]) & (f0_model[, i] <= U[i]) ) / iter
+  cat(paste0("f0 ", cov_f0i))
+}
 ```
