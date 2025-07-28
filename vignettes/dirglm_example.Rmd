@@ -108,6 +108,8 @@ sim_dat_3 <- function(n, p, seed=100) {
   data.frame(X, y)
 }
 
+# Simulation scenario 4 ----
+##  Uniform baseline with identity link
 sim_dat_4 <- function(n, p, seed=100) {
   set.seed(seed)
   X <- matrix(c(rep(1, n), runif(n * (p-1), min=-1, max=1)),
