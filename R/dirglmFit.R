@@ -13,6 +13,7 @@
 #' be any number within the range of observed values, but values near the boundary
 #' may cause numerical instability. This is an optional argument with \code{mean(y)}
 #' being the default value.
+#' @param gamma Shrinkage parameter for the prior variance on \code{beta}. Defaults to 1.
 #' @param spt Theoretical support of the response variable.
 #' @param betaStart Initial value for the regression coefficients \code{beta}.
 #' Defaults to the output obtained by fitting \code{gldrm}.
@@ -25,8 +26,9 @@
 #' @return Object of S3 class "dirglmControl"
 #'
 #' @export
-dirglm.control <- function(burnin=100, thin=10, save=1000, rho=0.1, mu0=NULL, spt=NULL,
-                             betaStart=NULL, f0Start=NULL, joint.update=TRUE, seed=NULL)
+dirglm.control <- function(burnin=100, thin=10, save=1000, rho=0.1,
+                           gamma=1, mu0=NULL, spt=NULL,
+                           betaStart=NULL, f0Start=NULL, joint.update=TRUE, seed=NULL)
 {
   if (burnin < 0 || floor(burnin) != burnin) stop("Number of burn-in samples must be an integer >= 0")
   if (thin   < 1 || floor(thin)   != thin)   stop("Thin must be an integer >= 1")
@@ -37,7 +39,8 @@ dirglm.control <- function(burnin=100, thin=10, save=1000, rho=0.1, mu0=NULL, sp
   ctrl <- list(burnin       = burnin,
                thin         = thin,
                save         = save,
-               rho.         = rho,
+               rho          = rho,
+               gamma        = gamma,
                mu0          = mu0,
                spt          = spt,
                betaStart    = betaStart,
@@ -64,6 +67,7 @@ dirglmFit <- function(formula, data, X, y,                # Data
   thin         <- dirglmControl$thin
   save         <- dirglmControl$save
   rho          <- dirglmControl$rho
+  gamma        <- dirglmControl$gamma
   joint.update <- dirglmControl$joint.update
   seed         <- dirglmControl$seed
 
@@ -93,7 +97,26 @@ dirglmFit <- function(formula, data, X, y,                # Data
   ### 4.3.1 Beta prior
   if (is.null(mb) || is.null(sb)) {
     if (is.null(mb)) mb <- rep(0, p)
-    if (is.null(sb)) sb <- rep(1, p)
+    if (is.null(sb)) {
+      sb <- rep(1, p)
+      mprime <- (spt[1] + spt[2]) / 2
+      Mprime <- (spt[l - 1] + spt[l]) / 2
+      gmprime <- linkfun(mprime)
+      gMprime <- linkfun(Mprime)
+      sdX <- apply(as.matrix(X[, -1], nrow=n), 2, sd)
+      sb <- c(1, (gamma * (gMprime - gmprime) / (2 * sdX))^2)
+
+      # [DEBUG]
+      sdX_str <- paste0("[", paste(sprintf("%.3f", sdX), collapse = ", "), "]")
+      sb_str  <- paste0("[", paste(sprintf("%.3f", sb),   collapse = ", "), "]")
+      message(sprintf("DEBUG"))
+      message( sprintf(
+        "mprime  = %.3f\nMprime  = %.3f\ngmprime = %.3f\ngMprime = %.3f\nsdX     = %s\nsb      = %s",
+        mprime, Mprime, gmprime, gMprime, sdX_str, sb_str
+      ) )
+      message(sprintf("class(sdX) = %s\nclass(sb) = %s", class(sdX), class(sb)))
+      message(sprintf("sb[1] = %f, sb[2] = %f", sb[1], sb[2]))
+    }
   } else if (length(mb) != p) stop("length(mb) must match the number of covariates.")
   else if   (length(sb) != p) stop("length(sb) must match the number of covariates.")
   else if   (!all(sb)    > 0) stop(paste0("Beta prior variance-covariance matrix must be positive definite. ",
@@ -101,7 +124,7 @@ dirglmFit <- function(formula, data, X, y,                # Data
 
   ### 4.3.2 Dirichlet prior
   if (is.null(dir_pr_parm)) {
-    ind_mt      <- outer(y, spt, `==`) * 1
+    ind_mt      <- outer(y, spt, `==`)
     alpha       <- 1
     dir_pr_parm <- alpha * colMeans(ind_mt)
     eps         <- 1e-6
@@ -120,8 +143,11 @@ dirglmFit <- function(formula, data, X, y,                # Data
   # Count number of acceptences
   n_acc_beta <- 0
   n_acc_f0   <- 0
+  burning <- TRUE
   ## 5. MCMC loop
   for (r in 2:iter) {
+    if (r > burnin) burning <- FALSE
+
     ### 5.1 Beta update
     Sig  <- Sigma_beta(X, mu, bpr2, rho, linkfun, mu.eta)
     if (joint.update) {
@@ -141,7 +167,7 @@ dirglmFit <- function(formula, data, X, y,                # Data
     mu        <- linkinv(X %*% beta)                   # Updated for general link
 
     # Increment number of acceptances (beta)
-    n_acc_beta <- n_acc_beta + as.integer(acc_beta)
+    if(!burning) n_acc_beta <- n_acc_beta + as.integer(acc_beta)
 
     ### 5.2 f0 update
     propsl_dir_parm <- dir_parm(y, tht, btht, dir_pr_parm, ind_mt)
@@ -155,7 +181,7 @@ dirglmFit <- function(formula, data, X, y,                # Data
     acc_f0 <- out$acc_f0
 
     # Increment number of acceptances (f0)
-    n_acc_f0 <- n_acc_f0 + as.integer(acc_f0)
+    if(!burning) n_acc_f0 <- n_acc_f0 + as.integer(acc_f0)
 
     # 5.3 Storage
     if (r > burnin & r %% thin == 0) {
@@ -166,8 +192,8 @@ dirglmFit <- function(formula, data, X, y,                # Data
   }
 
   # Calculate proportion of acceptances
-  p_acc_beta <- n_acc_beta / iter
-  p_acc_f0   <- n_acc_f0 / iter
+  p_acc_beta <- n_acc_beta / (iter - burnin)
+  p_acc_f0   <- n_acc_f0 / (iter - burnin)
   if (p_acc_beta < 0.01 || p_acc_f0 < 0.01) warning(paste0("Markov chain did not mix well. ",
                                                            "Consider editing rho or increasing the total number of iterations."))
 

@@ -99,6 +99,7 @@ dirglm <- function(formula, data=NULL, link="log", mb=NULL, sb=NULL, dir_pr_parm
   ## 3. Initialize (theoretical) support if not provided by the user
   spt <- dirglmControl$spt
   if (is.null(spt)) spt <- sort(unique(y)) ## Observed support
+  if (is.unsorted(spt)) spt <- sort(spt)
   l <- length(spt)
 
   ## 4. Initialize mu0 if not provided by the user
@@ -121,12 +122,10 @@ dirglm <- function(formula, data=NULL, link="log", mb=NULL, sb=NULL, dir_pr_parm
                   mu0          = mu0,
                   thetaControl = thetaControl)
     betaStart <- gfit$beta
-
-    # If gldrm fails, use a glm
-    #if (any(is.na(betaStart))) {
-      #gfit <- glm(formula      = formula,
-                  #data         = data )
-    #}
+    if (any(is.na(betaStart))) {
+      lmcoef <- stats::lm.fit(x, linkfun(mu0))$coef
+      betaStart <- lmcoef
+    }
   }
 
   ### 5.2 f0
@@ -172,7 +171,9 @@ dirglm <- function(formula, data=NULL, link="log", mb=NULL, sb=NULL, dir_pr_parm
     link        = link,
     spt         = fit$spt,
     mu0         = fit$mu0,
-    iter        = fit$iter,
+    burnin      = dirglmControl$burnin,
+    thin        = dirglmControl$thin,
+    save        = dirglmControl$save,
     p_acc_beta  = fit$p_acc_beta,
     p_acc_f0    = fit$p_acc_f0
   )
