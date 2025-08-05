@@ -9,6 +9,7 @@ dirglm.control(
   thin = 10,
   save = 1000,
   rho = 0.1,
+  gamma = 1,
   mu0 = NULL,
   spt = NULL,
   betaStart = NULL,
@@ -25,6 +26,8 @@ dirglm.control(
 \item{save}{Number of MCMC samples to return. Defaults to 1000.}
 
 \item{rho}{MCMC update step size. A scalar in \eqn{(0, 1]}. Defaults to 0.1.}
+
+\item{gamma}{Shrinkage parameter for the prior variance on \code{beta}. Defaults to 1.}
 
 \item{mu0}{Mean of the reference distribution. The reference distribution is
 not unique unless its mean is restricted to a specific value. This value can

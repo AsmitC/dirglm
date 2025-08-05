@@ -124,7 +124,7 @@ dirglmFit <- function(formula, data, X, y,                # Data
 
   ### 4.3.2 Dirichlet prior
   if (is.null(dir_pr_parm)) {
-    ind_mt      <- outer(y, spt, `==`) * 1
+    ind_mt      <- outer(y, spt, `==`)
     alpha       <- 1
     dir_pr_parm <- alpha * colMeans(ind_mt)
     eps         <- 1e-6

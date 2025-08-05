@@ -67,7 +67,7 @@ f0y <- function(y, spt, f0) {
   #for (i in 1:n) {
     #f0_y[i] <- sum(f0[y[i] == spt])
   #}
-  ind_mt <- outer(spt, y, `==`) * 1
+  ind_mt <- outer(spt, y, `==`)
   f0_y <- colSums(f0 * ind_mt)
   return(f0_y)
 }
