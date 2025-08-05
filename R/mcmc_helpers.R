@@ -62,7 +62,12 @@ dir_parm <- function(y, tht, btht, dir_pr_parm, ind_mt) {
 #' @keywords internal
 
 f0y <- function(y, spt, f0) {
-  ind_mt <- outer(spt, y, `==`)
+  #n <- length(y)
+  #f0_y <- numeric(n)
+  #for (i in 1:n) {
+    #f0_y[i] <- sum(f0[y[i] == spt])
+  #}
+  ind_mt <- outer(spt, y, `==`) * 1
   f0_y <- colSums(f0 * ind_mt)
   return(f0_y)
 }
@@ -126,7 +131,7 @@ f0_update <- function(y,
     pr_f0[j] <- rbeta(1, cr_dir_parm[j], sum(cr_dir_parm[-j]))
     pr_f0[-j] <- pr_f0[-j] * (1 - pr_f0[j]) / sum(pr_f0[-j])
 
-    if (sum(pr_f0 < 1e-8) == 0) {
+    if (sum(pr_f0 < 1e-3) == 0) {
       out <- tht_sol(spt, pr_f0, cr_mu, cr_tht)
       pr_tht <- out$tht
       pr_btht <- out$btht
