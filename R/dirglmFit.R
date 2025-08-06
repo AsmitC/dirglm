@@ -98,24 +98,12 @@ dirglmFit <- function(formula, data, X, y,                # Data
   if (is.null(mb) || is.null(sb)) {
     if (is.null(mb)) mb <- rep(0, p)
     if (is.null(sb)) {
-      #sb <- rep(1, p)
       mprime <- (spt[1] + spt[2]) / 2
       Mprime <- (spt[l - 1] + spt[l]) / 2
       gmprime <- linkfun(mprime)
       gMprime <- linkfun(Mprime)
       sdX <- apply(as.matrix(X[, -1], nrow=n), 2, sd)
       sb <- c(1, (gamma * (gMprime - gmprime) / (2 * sdX))^2)
-
-      # [DEBUG]
-      #sdX_str <- paste0("[", paste(sprintf("%.3f", sdX), collapse = ", "), "]")
-      #sb_str  <- paste0("[", paste(sprintf("%.3f", sb),   collapse = ", "), "]")
-      #message(sprintf("DEBUG"))
-      #message( sprintf(
-        #"mprime  = %.3f\nMprime  = %.3f\ngmprime = %.3f\ngMprime = %.3f\nsdX     = %s\nsb      = %s",
-        #mprime, Mprime, gmprime, gMprime, sdX_str, sb_str
-      # )
-      #message(sprintf("class(sdX) = %s\nclass(sb) = %s", class(sdX), class(sb)))
-      #message(sprintf("sb[1] = %f, sb[2] = %f", sb[1], sb[2]))
     }
   } else if (length(mb) != p) stop("length(mb) must match the number of covariates.")
   else if   (length(sb) != p) stop("length(sb) must match the number of covariates.")

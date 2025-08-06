@@ -95,11 +95,11 @@ print.summary.dirglm <- function(x, digits = 3, ...) {
   # Metadata
   m <- x$meta
   cat(sprintf("Formula: %s\n",                         m$Formula))
-  cat(sprintf("Data:    Number of observations: %d\n", m$nobs))
   cat(sprintf("Link:    %s\n",                         m$Link))
-  cat(sprintf("Draws:   iter = %d (burnin = %d, thin = %d, save = %d)\n",
+  cat(sprintf("Draws:   %d (burnin = %d, thin = %d, save = %d)\n",
               m$iter, m$burnin, m$thin, m$save))
-  cat(sprintf("Acceptance Ratios: beta = %.*f, f0 = %.*f\n\n",
+  cat(sprintf("Number of observations: %d\n", m$nobs))
+  cat(sprintf("Acceptance Ratio: beta = %.*f, f0 = %.*f\n\n",
               digits, m$p_acc_beta, digits, m$p_acc_f0))
 
   # Helper
