@@ -161,8 +161,8 @@ f0_update <- function(y,
       }
     } else {
       acc_f0 <- FALSE
-    }
-  }
+    } # Closes line 134
+  } # Closes line 129
   return(
     list(
       cr_f0   = cr_f0,

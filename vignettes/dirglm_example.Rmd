@@ -206,8 +206,8 @@ beta_true <- c(5, 2, 0, 0, 0)  # True beta
 f0_true <- rep(1/l, l) # True f0
 p <- 5
 
-beta_U <- beta_true + 0.25 * pmax(beta_true, 1) # Since some beta = 0
-beta_L <- beta_true - 0.25 * pmax(beta_true, 1)
+beta_U <- beta_true + 0.25 * pmax(abs(beta_true), 1) # Since some beta = 0
+beta_L <- beta_true - 0.25 * pmax(abs(beta_true), 1) # Since some beta = 0
 f0_U <- f0_true + 0.25 * 1 / l
 f0_L <- f0_true - 0.25 * 1 / l
 M <- 500
@@ -243,7 +243,7 @@ for (m in 1:M) {
     p_mu_f0[m, f0i] <- mean(f0_samples[, f0i] <= f0_U[f0i])
   }
 }
-cat(sprintf("Done with dirGLM fits"))
+cat(sprintf("Done with dirGLM fits\n"))
 
 # Compute average of pml and pmu
 p_ml_bar_beta <- colMeans(p_ml_b)
@@ -253,7 +253,6 @@ p_mu_bar_f0 <- colMeans(p_mu_f0)
 cat(sprintf("Computed p_bars\n"))
 
 # Compute qml and qmu
-idx <- 1
 m <- 1
 q_ml_b <- matrix(NA, nrow=M, ncol=p)
 q_mu_b <- matrix(NA, nrow=M, ncol=p)
