@@ -2,15 +2,23 @@
 #' @param fit A fitted \code{dirglm} object
 #' @param prob value between 0 and 1 indicating the desired probability
 #' level for the credible intervals. Defaults to 0.95.
+#' @param robust Logical indicating whether to show robust statistics. for
+#' \code{Estimate} and \code{Est.Error}. Defaults to \code{FALSE}. See
+#' details for more information.
 #'
 #' @return A an object of class \code{summary.dirglm}. A list
 #' containing with two elements, \code{beta} and \code{f0},
 #' each containing a data frame with columns \code{Estimate},
 #' \code{Est.Error}, \code{l-95% Ci}, \code{u-95% Ci}
 #'
+#' @details If \code{robust} is set to \code{TRUE}, the median and
+#' median absolute deviation (MAD) of the posterior samples
+#' are shown for \code{Estimate} and \code{Est.Error}.
+#' Otherwise, the mean and the standard deviations are used.
+#'
 #' @method summary dirglm
 #' @export
-summary.dirglm <- function(fit, prob = 0.95) {
+summary.dirglm <- function(fit, prob=0.95, robust=FALSE) {
   if (!inherits(fit, "dirglm")) stop("fit must be an object of class 'dirglm'")
   if (prob <= 0 || prob >= 1)   stop("prob must be a value between 0 and 1")
 
@@ -18,7 +26,7 @@ summary.dirglm <- function(fit, prob = 0.95) {
   beta <- fit$samples$beta
   f0   <- fit$samples$f0
   p <- ncol(beta); s <- ncol(f0)
-  colnames(beta) <- paste0("beta_", seq_len(p))
+  colnames(beta) <- c("Intercept", paste0("beta_", seq_len(p - 1)))
   colnames(f0)   <- paste0("f0_",   seq_len(s))
 
   # Build output tables
@@ -32,9 +40,16 @@ summary.dirglm <- function(fit, prob = 0.95) {
     qs <- c((1 - prob)/2, 1 - (1 - prob)/2)
     stats <- t(vapply(seq_len(ncol(mat)), function(j) {
       col <- mat[, j]
+      if (robust) {
+        est     <- median(col)
+        est.err <- mad(col)
+      } else {
+        est     <- mean(col)
+        est.err <- sd(col)
+      }
       c(
-        Estimate  = mean(col),
-        `Est.Error` = sd(col),
+        Estimate    = est,
+        `Est.Error` = est.err,
         quantile(col, qs[1], names = FALSE),
         quantile(col, qs[2], names = FALSE)
       )

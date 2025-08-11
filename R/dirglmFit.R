@@ -99,13 +99,12 @@ dirglmFit <- function(formula, data, X, y,                # Data
   if (is.null(mb) || is.null(sb)) {
     if (is.null(mb)) mb <- rep(0, p)
     if (is.null(sb)) {
-      mprime <- (spt[1] + spt[2]) * 0.25
-      Mprime <- (spt[l - 1] + spt[l]) * 0.75
+      mprime <- spt[1] + (spt[2] - spt[1]) * 0.25
+      Mprime <- spt[l - 1] + (spt[l] - spt[l - 1]) * 0.75
       gmprime <- linkfun(mprime)
       gMprime <- linkfun(Mprime)
       sdX <- c(apply(as.matrix(X[, -1], nrow=n), 2, sd))
-      sdX <- c(max(sdX), sdX) # Intercept is diffuse
-      sb <- (gamma * (gMprime - gmprime) / (2 * sdX))^2
+      sb <- c(1, (gamma * (gMprime - gmprime) / (2 * sdX))^2)
     }
   } else if (length(mb) != p) stop("length(mb) must match the number of covariates.")
   else if   (length(sb) != p) stop("length(sb) must match the number of covariates.")

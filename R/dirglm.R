@@ -55,12 +55,13 @@
 #'
 #' @export
 dirglm <- function(formula, data=NULL, link="log", mb=NULL, sb=NULL, dir_pr_parm=NULL,
-                     dirglmControl=dirglm.control(), thetaControl=theta.control())
+                   dirglmControl=dirglm.control(), thetaControl=theta.control())
 
 {
   ## 1. Model initialization
   mf <- stats::model.frame(formula, data)
   X  <- stats::model.matrix(attr(mf, "terms"), mf)
+  if (qr(X)$rank < ncol(X)) stop("X is singular. Revise formula or data.")
   attributes(X)[c("assign", "contrasts")] <- NULL
   y  <- stats::model.response(mf, type = "numeric")
 

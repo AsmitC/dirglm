@@ -221,13 +221,11 @@ beta_update_joint <- function(X,
 
     pr_llik <- sum(pr_tht * y - pr_btht)
     cr_llik <- sum(cr_tht * y - cr_btht)
-    # pr_pbt <- dmvnorm(pr_bt, log = T) # Prior probability (for proposal)
-    pr_pbt <- dmvnorm(pr_bt,            # Updated
+    pr_pbt <- dmvnorm(pr_bt,
                       mean = mb,
                       sigma = diag(sb),
                       log = T)
-    # cr_pbt <- dmvnorm(cr_bt, log = T) # Prior probability (for current)
-    cr_pbt <- dmvnorm(cr_bt,            # Updated
+    cr_pbt <- dmvnorm(cr_bt,
                       mean = mb,
                       sigma = diag(sb),
                       log = T)
@@ -312,13 +310,11 @@ beta_update_separate <- function(X,
 
       pr_llik <- sum(pr_tht * y - pr_btht)
       cr_llik <- sum(cr_tht * y - cr_btht)
-      # pr_pbt <- dnorm(pr_bt[j], log = T)  # Prior probability (for proposal)?
-      pr_pbt <- dnorm(pr_bt[j],             # Updated
+      pr_pbt <- dnorm(pr_bt[j],
                       mean = mb[j],
                       sigma = sqrt(sb[j]),
                       log = T)
-      # cr_pbt <- dnorm(cr_bt[j], log = T)  # Prior probability (for current)?
-      cr_pbt <- dnorm(cr_bt[j],             # Updated
+      cr_pbt <- dnorm(cr_bt[j],
                       mean = mb[j],
                       sigma = sqrt(sb[j]),
                       log = T)
