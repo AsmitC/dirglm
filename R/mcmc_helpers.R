@@ -205,12 +205,12 @@ beta_update_joint <- function(X,
                               linkinv,
                               mu.eta,
                               mb,
-                              sb) {
+                              Sb) {
   n <- dim(X)[1]
   l <- length(spt)
 
   pr_bt <- as.vector(mvtnorm::rmvnorm(1, mean = cr_bt, sigma = cr_Sig))
-  pr_mu <- as.numeric(linkinv(X %*% pr_bt))          # Updated for general link
+  pr_mu <- as.numeric(linkinv(X %*% pr_bt))
 
   if (sum(spt[1] <= pr_mu & pr_mu <= spt[l]) == n) {
     out <- tht_sol(spt, cr_f0, pr_mu, cr_tht)
@@ -223,11 +223,11 @@ beta_update_joint <- function(X,
     cr_llik <- sum(cr_tht * y - cr_btht)
     pr_pbt <- dmvnorm(pr_bt,
                       mean = mb,
-                      sigma = diag(sb),
+                      sigma = Sb,
                       log = T)
     cr_pbt <- dmvnorm(cr_bt,
                       mean = mb,
-                      sigma = diag(sb),
+                      sigma = Sb,
                       log = T)
     cr_qbt <- dmvnorm(cr_bt,
                       mean = pr_bt,
@@ -290,7 +290,7 @@ beta_update_separate <- function(X,
                                  linkinv,
                                  mu.eta,
                                  mb,
-                                 sb) {
+                                 Sb) {
   n <- dim(X)[1]
   p <- dim(X)[2]
   l <- length(spt)
@@ -312,11 +312,11 @@ beta_update_separate <- function(X,
       cr_llik <- sum(cr_tht * y - cr_btht)
       pr_pbt <- dnorm(pr_bt[j],
                       mean = mb[j],
-                      sigma = sqrt(sb[j]),
+                      sigma = sqrt(Sb[j]),
                       log = T)
       cr_pbt <- dnorm(cr_bt[j],
                       mean = mb[j],
-                      sigma = sqrt(sb[j]),
+                      sigma = sqrt(Sb[j]),
                       log = T)
       cr_qbt <- dnorm(cr_bt[j],
                       mean = pr_bt[j],

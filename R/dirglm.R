@@ -15,8 +15,8 @@
 #' function. The second is the inverse link function. The third is the derivative
 #' of the inverse link function. All three functions must be vectorized.
 #' @param mb Prior mean for beta. Defaults to a p-length vector whose entries are all 0.
-#' @param sb Vector containing the diagonal entries of the prior variance-covariance
-#' matrix for beta. Defaults to the p-dimensional identity matrix.
+#' @param Sb Prior variance-covariance matrix for beta.
+#' Defaults to the p-dimensional identity matrix. See details for more information.
 #' @param dir_pr_parm Dirichlet prior parameter for f0. Defaults to the observed
 #' response frequency distribution. If specified, it should be a p-length vector
 #' with positive entries.
@@ -35,11 +35,14 @@
 #' mirror the "link-glm" class. Objects of this class can be created with the
 #' \code{stats::make.link} function.
 #'
+#' This package currently only supports joint updates for beta
+#' when \code{Sb} is non-diagonal.
+#'
 #'The "dirglm" class is a list of the following items.
 #' \itemize{
 #' \item \code{samples} A list containing the MCMC samples for \code{f0} and \code{beta}.
 #' \item \code{mb} Prior mean for \code{beta}.
-#' \item \code{sb} Diagonal entries of the prior variance-covariance matrix for \code{beta}.
+#' \item \code{Sb} Prior variance-covariance matrix for \code{beta}.
 #' \item \code{dir_pr_parm} Dirichlet prior parameter.
 #' \item \code{formula} Model formula.
 #' \item \code{data} Model data frame.
@@ -54,7 +57,7 @@
 #' }
 #'
 #' @export
-dirglm <- function(formula, data=NULL, link="log", mb=NULL, sb=NULL, dir_pr_parm=NULL,
+dirglm <- function(formula, data=NULL, link="log", mb=NULL, Sb=NULL, dir_pr_parm=NULL,
                    dirglmControl=dirglm.control(), thetaControl=theta.control())
 
 {
@@ -152,7 +155,7 @@ dirglm <- function(formula, data=NULL, link="log", mb=NULL, sb=NULL, dir_pr_parm
     y                    = y,
     link                 = link,
     mb                   = mb,
-    sb                   = sb,
+    Sb                   = Sb,
     dir_pr_parm          = dir_pr_parm,
     mu0                  = mu0,
     spt                  = spt,
@@ -165,7 +168,7 @@ dirglm <- function(formula, data=NULL, link="log", mb=NULL, sb=NULL, dir_pr_parm
   out <- list(
     samples     = fit$samples,
     mb          = fit$mb,
-    sb          = fit$sb,
+    Sb          = fit$Sb,
     dir_pr_parm = fit$dir_pr_parm,
     formula     = formula,
     data        = data.frame(mf),

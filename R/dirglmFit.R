@@ -14,7 +14,7 @@
 #' may cause numerical instability. This is an optional argument with \code{mean(y)}
 #' being the default value.
 #' @param gamma Shrinkage parameter for the (default) prior variance on \code{beta}.
-#' Defaults to 1. Will not be used if \code{sb} is specified in \code{dirglm}.
+#' Defaults to 1. Will not be used if \code{Sb} is specified in \code{dirglm}.
 #' @param spt Theoretical support of the response variable.
 #' @param betaStart Initial value for the regression coefficients \code{beta}.
 #' Defaults to the output obtained by fitting \code{gldrm}.
@@ -59,7 +59,7 @@ dirglm.control <- function(burnin=100, thin=10, save=1000, rho=0.1,
 #' @keywords internal
 dirglmFit <- function(formula, data, X, y,                # Data
                       link,                               # Link
-                      mb, sb, dir_pr_parm,                # Priors
+                      mb, Sb, dir_pr_parm,                # Priors
                       mu0, spt, init,                     # Specs
                       dirglmControl, thetaControl)        # Controls
 {
@@ -96,20 +96,24 @@ dirglmFit <- function(formula, data, X, y,                # Data
 
   ### 4.3 Validate priors
   ### 4.3.1 Beta prior
-  if (is.null(mb) || is.null(sb)) {
-    if (is.null(mb)) mb <- rep(0, p)
-    if (is.null(sb)) {
-      mprime <- spt[1] + (spt[2] - spt[1]) * 0.25
-      Mprime <- spt[l - 1] + (spt[l] - spt[l - 1]) * 0.75
-      gmprime <- linkfun(mprime)
-      gMprime <- linkfun(Mprime)
-      sdX <- c(apply(as.matrix(X[, -1], nrow=n), 2, sd))
-      sb <- c(1, (gamma * (gMprime - gmprime) / (2 * sdX))^2)
-    }
-  } else if (length(mb) != p) stop("length(mb) must match the number of covariates.")
-  else if   (length(sb) != p) stop("length(sb) must match the number of covariates.")
-  else if   (!all(sb)    > 0) stop(paste0("Beta prior variance-covariance matrix must be positive definite. ",
-                                   "Check that all(sb > 0)."))
+  if (is.null(mb)) mb <- rep(0, p)
+  else if (length(mb) != p) stop("length(mb) must match the number of covariates.")
+
+  Sbdiag <- TRUE
+  if (is.null(Sb)) {
+    mprime  <- spt[1] + (spt[2] - spt[1]) * 0.25
+    Mprime  <- spt[l - 1] + (spt[l] - spt[l - 1]) * 0.75
+    gmprime <- linkfun(mprime)
+    gMprime <- linkfun(Mprime)
+    sdX     <- c(apply(as.matrix(X[, -1], nrow=n), 2, sd))
+    Sbvec   <- c(1, (gamma * (gMprime - gmprime) / (2 * sdX))^2)
+    Sb      <- diag(Sbvec)
+  } else if (!all(dim(Sb)   == c(p, p))) stop("dim(Sb) must match the number of covariates.")
+  else if   (!all(diag(Sb)) > 0)         stop(paste0("Sb must be positive definite."))
+  else if (!all(Sb == diag(diag(Sb))))   Sbdiag <- FALSE
+
+  if (!Sbdiag) joint.update <- TRUE
+  if (!joint.update) Sb <- diag(Sb)
 
   ### 4.3.2 Dirichlet prior
   if (is.null(dir_pr_parm)) {
@@ -122,14 +126,13 @@ dirglmFit <- function(formula, data, X, y,                # Data
              length(dir_pr_parm)   != l) stop("dir_pr_parm must be positive with K atoms.")
 
   ### 4.4 Theta
-  mu      <- linkinv(X %*% beta)                   # Updated for general link
+  mu      <- linkinv(X %*% beta)
   out     <- tht_sol(spt, f0, mu, NULL)
   tht     <- out$tht
   btht    <- out$btht
   bpr2    <- out$bpr2
   f0_y    <- f0y(y, spt, f0)
 
-  # Count number of acceptences
   n_acc_beta <- 0
   n_acc_f0   <- 0
   burning <- TRUE
@@ -142,20 +145,20 @@ dirglmFit <- function(formula, data, X, y,                # Data
     if (joint.update) {
       b_out <- beta_update_joint(X, y, spt, beta, Sig, f0, tht,
                                  bpr2, btht, rho, linkfun, linkinv,
-                                 mu.eta, mb, sb)
+                                 mu.eta, mb, Sb)
     } else {
       b_out <- beta_update_separate(X, y, spt, beta, Sig, f0, tht,
                                      bpr2, btht, rho, linkfun, linkinv,
-                                     mu.eta, mb, sb)
+                                     mu.eta, mb, Sb)
     }
     beta      <- b_out$cr_bt
     tht       <- b_out$cr_tht
     btht      <- b_out$cr_btht
     bpr2      <- b_out$cr_bpr2
     acc_beta  <- b_out$acc_beta
-    mu        <- linkinv(X %*% beta)                   # Updated for general link
+    mu        <- linkinv(X %*% beta)
 
-    # Increment number of acceptances (beta)
+    #### Increment number of acceptances (beta)
     if(!burning) n_acc_beta <- n_acc_beta + as.integer(acc_beta)
 
     ### 5.2 f0 update
@@ -169,10 +172,10 @@ dirglmFit <- function(formula, data, X, y,                # Data
     bpr2   <- out$cr_bpr2
     acc_f0 <- out$acc_f0
 
-    # Increment number of acceptances (f0)
+    #### Increment number of acceptances (f0)
     if(!burning) n_acc_f0 <- n_acc_f0 + as.integer(acc_f0)
 
-    # 5.3 Storage
+    ### 5.3 Storage
     if (r > burnin & r %% thin == 0) {
       j <- (r - burnin) / thin
       beta_samples[j, ] <- beta
@@ -180,13 +183,13 @@ dirglmFit <- function(formula, data, X, y,                # Data
     }
   }
 
-  # Calculate proportion of acceptances
+  ## 6. Calculate acceptance ratio
   p_acc_beta <- n_acc_beta / (iter - burnin)
   p_acc_f0   <- n_acc_f0 / (iter - burnin)
   if (p_acc_beta < 0.01 || p_acc_f0 < 0.01) warning(paste0("Markov chain did not mix well. ",
                                                            "Consider editing rho or increasing the total number of iterations."))
 
-  ## 6. Tilt each f0 sample
+  ## 7. Tilt each f0 sample
   f0star_samples <- matrix(0, nrow = nrow(f0_samples), ncol = length(spt))
   for (iter in 1:nrow(f0_samples)) {
     wh     <- f0_samples[iter, ]
@@ -203,11 +206,11 @@ dirglmFit <- function(formula, data, X, y,                # Data
   }
   f0_samples     <- f0star_samples  # projected f0 samples
 
-  ## 7. Output
+  ## 8. Output
   list(samples     = list(beta = beta_samples,
                           f0   = f0_samples),
        mb                = mb,
-       sb                = sb,
+       Sb                = Sb,
        dir_pr_parm       = dir_pr_parm,
        spt               = spt,
        mu0               = mu0,
