@@ -4,13 +4,17 @@
 \alias{summary.dirglm}
 \title{Creates a summary of a fitted \code{dirglm} object}
 \usage{
-\method{summary}{dirglm}(fit, prob = 0.95)
+\method{summary}{dirglm}(fit, prob = 0.95, robust = FALSE)
 }
 \arguments{
 \item{fit}{A fitted \code{dirglm} object}
 
 \item{prob}{value between 0 and 1 indicating the desired probability
 level for the credible intervals. Defaults to 0.95.}
+
+\item{robust}{Logical indicating whether to show robust statistics. for
+\code{Estimate} and \code{Est.Error}. Defaults to \code{FALSE}. See
+details for more information.}
 }
 \value{
 A an object of class \code{summary.dirglm}. A list
@@ -20,4 +24,10 @@ each containing a data frame with columns \code{Estimate},
 }
 \description{
 Creates a summary of a fitted \code{dirglm} object
+}
+\details{
+If \code{robust} is set to \code{TRUE}, the median and
+median absolute deviation (MAD) of the posterior samples
+are shown for \code{Estimate} and \code{Est.Error}.
+Otherwise, the mean and the standard deviations are used.
 }

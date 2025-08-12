@@ -9,7 +9,7 @@ dirglm(
   data = NULL,
   link = "log",
   mb = NULL,
-  sb = NULL,
+  Sb = NULL,
   dir_pr_parm = NULL,
   dirglmControl = dirglm.control(),
   thetaControl = theta.control()
@@ -31,8 +31,8 @@ of the inverse link function. All three functions must be vectorized.}
 
 \item{mb}{Prior mean for beta. Defaults to a p-length vector whose entries are all 0.}
 
-\item{sb}{Vector containing the diagonal entries of the prior variance-covariance
-matrix for beta. Defaults to the p-dimensional identity matrix.}
+\item{Sb}{Prior variance-covariance matrix for beta.
+Defaults to the p-dimensional identity matrix. See details for more information.}
 
 \item{dir_pr_parm}{Dirichlet prior parameter for f0. Defaults to the observed
 response frequency distribution. If specified, it should be a p-length vector
@@ -59,11 +59,14 @@ The arguments \code{linkfun}, \code{linkinv}, and \code{mu.eta}
 mirror the "link-glm" class. Objects of this class can be created with the
 \code{stats::make.link} function.
 
+This package currently only supports joint updates for beta
+when \code{Sb} is non-diagonal.
+
 The "dirglm" class is a list of the following items.
 \itemize{
 \item \code{samples} A list containing the MCMC samples for \code{f0} and \code{beta}.
 \item \code{mb} Prior mean for \code{beta}.
-\item \code{sb} Diagonal entries of the prior variance-covariance matrix for \code{beta}.
+\item \code{Sb} Prior variance-covariance matrix for \code{beta}.
 \item \code{dir_pr_parm} Dirichlet prior parameter.
 \item \code{formula} Model formula.
 \item \code{data} Model data frame.

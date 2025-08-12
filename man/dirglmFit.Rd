@@ -11,7 +11,7 @@ dirglmFit(
   y,
   link,
   mb,
-  sb,
+  Sb,
   dir_pr_parm,
   mu0,
   spt,

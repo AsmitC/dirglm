@@ -19,7 +19,7 @@ beta_update_separate(
   linkinv,
   mu.eta,
   mb,
-  sb
+  Sb
 )
 }
 \arguments{
