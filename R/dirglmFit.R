@@ -109,7 +109,7 @@ dirglmFit <- function(formula, data, X, y,                # Data
     Sbvec   <- c(1, (gamma * (gMprime - gmprime) / (2 * sdX))^2)
     Sb      <- diag(Sbvec)
   } else if (!all(dim(Sb)   == c(p, p))) stop("dim(Sb) must match the number of covariates.")
-  else if   (!all(diag(Sb)) > 0)         stop(paste0("Sb must be positive definite."))
+  else if   (!all(diag(Sb)) > 0)         stop("Sb must be positive definite.")
   else if (!all(Sb == diag(diag(Sb))))   Sbdiag <- FALSE
 
   if (!Sbdiag) joint.update <- TRUE
