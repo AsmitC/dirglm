@@ -179,7 +179,7 @@ dir_glm.fit <- dirglm(y ~ X2 + X3, data=data, link=link,
                       dirglmControl=dirglm.control(mu0=mu0, spt=spt))
 beta_samples <- dir_glm.fit$samples$beta
 f0_samples <- dir_glm.fit$samples$f0
-colMeans(beta_samples)        # true beta is c(-1, 1)
+colMeans(beta_samples)        # true beta is c(-1, 1, 0)
 colMeans(f0_samples)          # true f0 is binomial = (0.031, 0.156, 0.313, 0.313, 0.156, 0.031) [rounded]
 ```
 
@@ -193,7 +193,7 @@ dir_glm.fit <- dirglm(y ~ X2 + X3 + X4 + X5, data=data, link="identity",
                         dirglmControl=dirglm.control(mu0=mu0, spt=spt))
 beta_samples <- dir_glm.fit$samples$beta
 f0_samples <- dir_glm.fit$samples$f0
-colMeans(beta_samples)        # true beta is c(5, 2)
+colMeans(beta_samples)        # true beta is c(5, 2, 0, 0, 0)
 colMeans(f0_samples)          # true f0 is uniform = (0.1, 0.1, 0.1, ..., 0.1)
 ```
 

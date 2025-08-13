@@ -51,7 +51,7 @@ test_that("dirglm and dirglmFit match", {
 
   set.seed(100)
   m2   <- dirglm:::dirglmFit(formula=formula, data=data, X=X, y=y, link=lf,
-                             mb=NULL, sb=NULL, dir_pr_parm=NULL,
+                             mb=NULL, Sb=NULL, dir_pr_parm=NULL,
                              mu0=mu0, spt=spt, init=init,
                              dirglmControl=ctrl,
                              thetaControl=gldrm:::theta.control())
@@ -68,7 +68,7 @@ test_that("dirglm matches intercept-only (empirical distribution) model", {
 
   m1 <- gldrm:::gldrm(y ~ X1 - 1, data=data, link="identity")
   m2 <- dirglm(y ~ X1 - 1, data=data, link="identity",
-               dirglmControl=dirglm:::dirglm.control(burnin=10000,
+               dirglmControl=dirglm:::dirglm.control(burnin=20000,
                                                      thin=10,
                                                      save=5000,
                                                      rho=1))
