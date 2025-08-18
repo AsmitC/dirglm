@@ -62,11 +62,6 @@ dir_parm <- function(y, tht, btht, dir_pr_parm, ind_mt) {
 #' @keywords internal
 
 f0y <- function(y, spt, f0) {
-  #n <- length(y)
-  #f0_y <- numeric(n)
-  #for (i in 1:n) {
-    #f0_y[i] <- sum(f0[y[i] == spt])
-  #}
   ind_mt <- outer(spt, y, `==`)
   f0_y <- colSums(f0 * ind_mt)
   return(f0_y)
