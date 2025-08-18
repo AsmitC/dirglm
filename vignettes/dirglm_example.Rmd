@@ -202,100 +202,56 @@ colMeans(f0_samples)          # true f0 is uniform = (0.1, 0.1, 0.1, ..., 0.1)
 spt <- 0:10
 l <- length(spt)
 mu0 <- 5
+p <- 5
 beta_true <- c(5, 2, 0, 0, 0)  # True beta
 f0_true <- rep(1/l, l) # True f0
-p <- 5
+M <- 1000
 
-beta_U <- beta_true + 0.25 * pmax(abs(beta_true), 1) # Since some beta = 0
-beta_L <- beta_true - 0.25 * pmax(abs(beta_true), 1) # Since some beta = 0
-f0_U <- f0_true + 0.25 * 1 / l
-f0_L <- f0_true - 0.25 * 1 / l
-M <- 500
 mcmc <- 1000
-p_ml_b <- matrix(NA, nrow=M, ncol=p)
-p_mu_b <- matrix(NA, nrow=M, ncol=p)
-p_ml_f0 <- matrix(NA, nrow=M, ncol=l)
-p_mu_f0 <- matrix(NA, nrow=M, ncol=l)
-all_samples_b <- matrix(NA, nrow=M*mcmc, ncol=p)
-all_samples_f0 <- matrix(NA, nrow=M*mcmc, ncol=l)
+alpha <- 0.1
+ql_b <- matrix(NA, nrow=M, ncol=p)
+qu_b <- matrix(NA, nrow=M, ncol=p)
+ql_f0 <- matrix(NA, nrow=M, ncol=l)
+qu_f0 <- matrix(NA, nrow=M, ncol=l)
 for (m in 1:M) {
   if (m == 1 || m %% 50 == 0) cat(sprintf("Starting dirGLM fit #%d\n", m))
-  # Generate data
-  data <- sim_dat_4(n = 500, p = 5)
+  seed <- floor(runif(1, min=1, max=1000))
+  # Generate data and fit
+  data <- sim_dat_4(n=500, p=5, seed=seed)
   dir_glm.fit <- dirglm(y ~ X2 + X3 + X4 + X5, data=data, link="identity",
                         dirglmControl=dirglm.control(mu0=mu0, spt=spt, save=mcmc))
   beta_samples <- dir_glm.fit$samples$beta
   f0_samples <- dir_glm.fit$samples$f0
   
-  # Save samples
-  all_samples_b[((m-1)*mcmc + 1):(m*mcmc), ] <- beta_samples
-  all_samples_f0[((m-1)*mcmc + 1):(m*mcmc), ] <- f0_samples
-  
-  # Go over each beta
-  for (bi in 1:p) {
-    p_ml_b[m, bi] <- mean(beta_samples[, bi] >= beta_L[bi])
-    p_mu_b[m, bi] <- mean(beta_samples[, bi] <= beta_U[bi])
-  }
-  
-  # Go over each f0
-  for (f0i in 1:l) {
-    p_ml_f0[m, f0i] <- mean(f0_samples[, f0i] >= f0_L[f0i])
-    p_mu_f0[m, f0i] <- mean(f0_samples[, f0i] <= f0_U[f0i])
-  }
-}
-cat(sprintf("Done with dirGLM fits\n"))
-
-# Compute average of pml and pmu
-p_ml_bar_beta <- colMeans(p_ml_b)
-p_mu_bar_beta <- colMeans(p_mu_b)
-p_ml_bar_f0 <- colMeans(p_ml_f0)
-p_mu_bar_f0 <- colMeans(p_mu_f0)
-cat(sprintf("Computed p_bars\n"))
-
-# Compute qml and qmu
-m <- 1
-q_ml_b <- matrix(NA, nrow=M, ncol=p)
-q_mu_b <- matrix(NA, nrow=M, ncol=p)
-q_ml_f0 <- matrix(NA, nrow=M, ncol=l)
-q_mu_f0 <- matrix(NA, nrow=M, ncol=l)
-for (m in 1:M) {
-  idx_start <- (m - 1) * mcmc + 1
-  idx_end <- m * mcmc
-  cur_samples_b <- all_samples_b[idx_start:idx_end, ]   # mcmc x p
-  cur_samples_f0 <- all_samples_f0[idx_start:idx_end, ] # mcmc x l
-
-  for (bi in 1:p) {
-    q_ml_b[m, bi] <- quantile(cur_samples_b[, bi], probs = p_ml_bar_beta[bi])
-    q_mu_b[m, bi] <- quantile(cur_samples_b[, bi], probs = p_mu_bar_beta[bi])
-  }
-  for (f0i in 1:l) {
-    q_ml_f0[m, f0i] <- quantile(cur_samples_f0[, f0i], probs = p_ml_bar_f0[f0i])
-    q_mu_f0[m, f0i] <- quantile(cur_samples_f0[, f0i], probs = p_mu_bar_f0[f0i])
-  }
-}
-cat(sprintf("Computed q_ms\n"))
-
-# Compute "coverage"
-s_l_beta <- rep(NA, p)
-s_u_beta <- rep(NA, p)
-s_l_f0 <- rep(NA, l)
-s_u_f0 <- rep(NA, l)
-
-# Go over each beta
-for (bi in 1:p) {
-  s_l_beta[bi] <- mean(q_ml_b[, bi] >= beta_L[bi])
-  s_u_beta[bi] <- mean(q_mu_b[, bi] <= beta_U[bi])
+  ql_b[m, ]  <- apply(beta_samples, 2, quantile, probs=alpha/2) # 5% quantile
+  qu_b[m, ]  <- apply(beta_samples, 2, quantile, probs=1-alpha/2) # 95% quantile
+  ql_f0[m, ] <- apply(f0_samples, 2, quantile, probs=alpha/2) # 5% quantile
+  qu_f0[m, ] <- apply(f0_samples, 2, quantile, probs=1-alpha/2) # 95% quantile
 }
 
-# Go over each f0
-for (f0i in 1:l) {
-  s_l_f0[f0i] <- mean(q_ml_f0[, f0i] >= f0_L[f0i])
-  s_u_f0[f0i] <- mean(q_mu_f0[, f0i] <= f0_U[f0i])
-}
+Btrue <- matrix(beta_true, nrow=M, ncol=p, byrow=T)
+Ftrue <- matrix(f0_true, nrow=M, ncol=l, byrow=T)
 
-# Print results
-cat("s_l_beta:", s_l_beta, "| p_l-bar:", p_ml_bar_beta, "\n")
-cat("s_u_beta:", s_u_beta, "| p_u-bar:", p_mu_bar_beta, "\n")
-cat("s_l_f0:", s_l_f0, "| p_l-bar:", p_ml_bar_f0, "\n")
-cat("s_u_f0:", s_u_f0, "| p_u-bar:", p_mu_bar_f0, "\n")
+# Coverage probabilities: should be near 1 - alpha
+cov_b <- colMeans(ql_b <= Btrue & Btrue <= qu_b)
+cov_f0 <- colMeans(ql_f0 <= Ftrue & Ftrue <= qu_f0)
+
+# Miss rates: should all be near alpha/2
+lower_miss_b <- colMeans(ql_b >= Btrue)
+upper_miss_b <- colMeans(qu_b <= Btrue)
+lower_miss_f0 <- colMeans(ql_f0 >= Ftrue)
+upper_miss_f0 <- colMeans(qu_f0 <= Ftrue)
+
+cat("\nCoverage:\n")
+cat("  Expected: ", 1 - alpha, "\n")
+cat("  Beta:", paste(round(cov_b, 3), collapse=", "), "\n")
+cat("  f0:", paste(round(cov_f0, 3), collapse=", "), "\n\n")
+cat("Miss rates:\n")
+cat("  Expected: ", alpha/2, "\n")
+cat("  Beta:\n")
+cat("    Lower:", paste(round(lower_miss_b, 3), collapse=", "), "\n")
+cat("    Upper:", paste(round(upper_miss_b, 3), collapse=", "), "\n")
+cat("  f0:\n")
+cat("    Lower:", paste(round(lower_miss_f0, 3), collapse=", "), "\n")
+cat("    Upper:", paste(round(upper_miss_f0, 3), collapse=", "), "\n")
 ```

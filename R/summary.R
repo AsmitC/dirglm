@@ -2,7 +2,7 @@
 #' @param fit A fitted \code{dirglm} object
 #' @param prob value between 0 and 1 indicating the desired probability
 #' level for the credible intervals. Defaults to 0.95.
-#' @param robust Logical indicating whether to show robust statistics. for
+#' @param robust Logical indicating whether to show robust statistics for
 #' \code{Estimate} and \code{Est.Error}. Defaults to \code{FALSE}. See
 #' details for more information.
 #'
