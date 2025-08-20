@@ -63,7 +63,7 @@ dirglmFit <- function(formula, data, X, y,                # Data
                       mu0, spt, init,                     # Specs
                       dirglmControl, thetaControl)        # Controls
 {
-  ## 1. Extract dirglmControl parameters
+  # Extract dirglmControl parameters
   burnin       <- dirglmControl$burnin
   thin         <- dirglmControl$thin
   save         <- dirglmControl$save
@@ -74,12 +74,12 @@ dirglmFit <- function(formula, data, X, y,                # Data
 
   if (!is.null(seed)) set.seed(seed) # Set seed
 
-  ## 1.1 Extract link
+  # Extract link
   linkfun <- link$linkfun
   linkinv <- link$linkinv
   mu.eta  <- link$mu.eta
 
-  ## 4. MCMC Initialization
+  # MCMC Initialization
   n    <- length(y)
   X    <- as.matrix(X, nrow=n)
   p    <- ncol(X)
@@ -94,9 +94,17 @@ dirglmFit <- function(formula, data, X, y,                # Data
   beta_samples[1, ] <- beta
   f0_samples[1, ]   <- f0
 
-  ### 4.3 Validate priors
-  ### 4.3.1 Beta prior
-  if (is.null(mb)) mb <- rep(0, p)
+  # Validate priors
+
+  # Beta prior
+  if (is.null(mb)) {
+    mprime  <- spt[1] + (spt[2] - spt[1]) * 0.25
+    Mprime  <- spt[l - 1] + (spt[l] - spt[l - 1]) * 0.75
+    gmprime <- linkfun(mprime)
+    gMprime <- linkfun(Mprime)
+    mid_spt <- (gmprime + gMprime) / 2
+    mb <- c(mid_spt, rep(0, p-1))
+  }
   else if (length(mb) != p) stop("length(mb) must match the number of covariates.")
 
   Sbdiag <- TRUE
@@ -106,7 +114,7 @@ dirglmFit <- function(formula, data, X, y,                # Data
     gmprime <- linkfun(mprime)
     gMprime <- linkfun(Mprime)
     sdX     <- c(apply(as.matrix(X[, -1], nrow=n), 2, sd))
-    Sbvec   <- c(1, (gamma * (gMprime - gmprime) / (2 * sdX))^2)
+    Sbvec   <- (gMprime - gmprime)^2 * c(100, (gamma / (2 * sdX))^2) # Re-scaling on the linear-predictor scale
     Sb      <- diag(Sbvec)
   } else if (!all(dim(Sb)   == c(p, p))) stop("dim(Sb) must match the number of covariates.")
   else if   (!all(diag(Sb)) > 0)         stop("Sb must be positive definite.")
@@ -115,7 +123,7 @@ dirglmFit <- function(formula, data, X, y,                # Data
   if (!Sbdiag) joint.update <- TRUE
   if (!joint.update) Sb <- diag(Sb)
 
-  ### 4.3.2 Dirichlet prior
+  # Dirichlet prior
   if (is.null(dir_pr_parm)) {
     ind_mt      <- outer(y, spt, `==`)
     alpha       <- 1
@@ -125,7 +133,7 @@ dirglmFit <- function(formula, data, X, y,                # Data
   } else if (!all(dir_pr_parm > 0) ||
              length(dir_pr_parm)   != l) stop("dir_pr_parm must be positive with K atoms.")
 
-  ### 4.4 Theta
+  # Theta
   mu      <- linkinv(X %*% beta)
   out     <- tht_sol(spt, f0, mu, NULL)
   tht     <- out$tht
@@ -135,12 +143,13 @@ dirglmFit <- function(formula, data, X, y,                # Data
 
   n_acc_beta <- 0
   n_acc_f0   <- 0
-  burning <- TRUE
-  ## 5. MCMC loop
+  burning    <- TRUE
+
+  # MCMC loop
   for (r in 2:iter) {
     if (burning && r > burnin) burning <- FALSE
 
-    ### 5.1 Beta update
+    # Beta update
     Sig  <- Sigma_beta(X, mu, bpr2, rho, linkfun, mu.eta)
     if (joint.update) {
       b_out <- beta_update_joint(X, y, spt, beta, Sig, f0, tht,
@@ -158,10 +167,10 @@ dirglmFit <- function(formula, data, X, y,                # Data
     acc_beta  <- b_out$acc_beta
     mu        <- linkinv(X %*% beta)
 
-    #### Increment number of acceptances (beta)
+    # Increment number of acceptances (beta)
     if(!burning) n_acc_beta <- n_acc_beta + as.integer(acc_beta)
 
-    ### 5.2 f0 update
+    # f0 update
     propsl_dir_parm <- dir_parm(y, tht, btht, dir_pr_parm, ind_mt)
     out             <- f0_update(y, spt, f0, f0_y, propsl_dir_parm,
                                  mu, tht, bpr2, btht, dir_pr_parm, ind_mt)
@@ -172,10 +181,10 @@ dirglmFit <- function(formula, data, X, y,                # Data
     bpr2   <- out$cr_bpr2
     acc_f0 <- out$acc_f0
 
-    #### Increment number of acceptances (f0)
+    # Increment number of acceptances (f0)
     if(!burning) n_acc_f0 <- n_acc_f0 + as.integer(acc_f0)
 
-    ### 5.3 Storage
+    # Storage
     if (r > burnin & r %% thin == 0) {
       j <- (r - burnin) / thin
       beta_samples[j, ] <- beta
@@ -183,13 +192,13 @@ dirglmFit <- function(formula, data, X, y,                # Data
     }
   }
 
-  ## 6. Calculate acceptance ratio
+  # Calculate acceptance ratio
   p_acc_beta <- n_acc_beta / (iter - burnin)
   p_acc_f0   <- n_acc_f0 / (iter - burnin)
   if (p_acc_beta < 0.01 || p_acc_f0 < 0.01) warning(paste0("Markov chain did not mix well. ",
-                                                           "Consider editing rho or increasing the total number of iterations."))
+                                                           "Consider changing rho or increasing the number of iterations."))
 
-  ## 7. Tilt each f0 sample
+  # Tilt each f0 sample
   f0star_samples <- matrix(0, nrow = nrow(f0_samples), ncol = length(spt))
   for (iter in 1:nrow(f0_samples)) {
     wh     <- f0_samples[iter, ]
@@ -206,7 +215,10 @@ dirglmFit <- function(formula, data, X, y,                # Data
   }
   f0_samples     <- f0star_samples  # projected f0 samples
 
-  ## 8. Output
+  colnames(beta_samples) <- c("Intercept", paste0("beta_", seq_len(p-1)))
+  colnames(f0_samples)   <- paste0("f0_", seq_len(l))
+
+  # Output
   list(samples     = list(beta = beta_samples,
                           f0   = f0_samples),
        mb                = mb,

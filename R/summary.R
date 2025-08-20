@@ -26,14 +26,11 @@ summary.dirglm <- function(fit, prob=0.95, robust=FALSE) {
   beta <- fit$samples$beta
   f0   <- fit$samples$f0
   p <- ncol(beta); s <- ncol(f0)
-  colnames(beta) <- c("Intercept", paste0("beta_", seq_len(p - 1)))
-  colnames(f0)   <- paste0("f0_",   seq_len(s))
 
-  # Build output tables
   pct <- prob * 100
   pct_str <- if (pct == floor(pct)) as.integer(pct) else pct
-  l_name <- paste0("l-", pct_str, "% CI")
-  u_name <- paste0("u-", pct_str, "% CI")
+  l_name <- paste0("l-", pct_str, "% CrI")
+  u_name <- paste0("u-", pct_str, "% CrI")
 
   # Helper
   make_tbl <- function(mat) {
@@ -54,13 +51,13 @@ summary.dirglm <- function(fit, prob=0.95, robust=FALSE) {
         quantile(col, qs[2], names = FALSE)
       )
     }, numeric(4)))
-    # now assign the dynamic names
     colnames(stats) <- c("Estimate", "Est.Error", l_name, u_name)
     df <- as.data.frame(stats, check.names = FALSE)
     rownames(df) <- colnames(mat)
     df
   }
 
+  # Make output tables
   beta_tbl <- make_tbl(beta)
   f0_tbl   <- make_tbl(f0)
 
@@ -73,6 +70,7 @@ summary.dirglm <- function(fit, prob=0.95, robust=FALSE) {
   save    <- fit$save
   iter    <- burnin + thin * save
 
+  # Output
   meta <- list(
     Link       = lf.name,
     Formula    = form,

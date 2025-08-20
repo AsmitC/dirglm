@@ -61,7 +61,7 @@ dirglm <- function(formula, data=NULL, link="log", mb=NULL, Sb=NULL, dir_pr_parm
                    dirglmControl=dirglm.control(), thetaControl=theta.control())
 
 {
-  ## 1. Model initialization
+  # Model initialization
   mf <- stats::model.frame(formula, data)
   X  <- stats::model.matrix(attr(mf, "terms"), mf)
   if (qr(X)$rank < ncol(X)) stop("X is singular. Revise formula or data.")
@@ -78,7 +78,7 @@ dirglm <- function(formula, data=NULL, link="log", mb=NULL, Sb=NULL, dir_pr_parm
     stop("link must be a string or a list containing linkfun, linkinv, mu.eta")
   }
 
-  ### 2.1 Check that all link functions are vectorized
+  # Check that all link functions are vectorized
   linkfun <- link$linkfun
   linkinv <- link$linkinv
   mu.eta  <- link$mu.eta
@@ -100,13 +100,13 @@ dirglm <- function(formula, data=NULL, link="log", mb=NULL, Sb=NULL, dir_pr_parm
         !is.vectorized(mu.eta, inveta.testdata)) stop("link must be vectorized.")
   }
 
-  ## 3. Initialize (theoretical) support if not provided by the user
+  # Initialize (theoretical) support if not provided by the user
   spt <- dirglmControl$spt
   if (is.null(spt)) spt <- sort(unique(y)) ## Observed support
   if (is.unsorted(spt)) spt <- sort(spt)
   l <- length(spt)
 
-  ## 4. Initialize mu0 if not provided by the user
+  # Initialize mu0 if not provided by the user
   mu0 <- dirglmControl$mu0
   if (is.null(mu0)) mu0 <- mean(y)
   else if (mu0 <= min(spt) || mu0 >= max(spt)) {
@@ -114,11 +114,11 @@ dirglm <- function(formula, data=NULL, link="log", mb=NULL, Sb=NULL, dir_pr_parm
                 "value or set mu0=NULL to use the default value, mean(y)."))
   }
 
-  ## 5. MCMC Initialization
+  # MCMC Initialization
   betaStart    <- dirglmControl$betaStart
   f0Start      <- dirglmControl$f0Start
 
-  ### 5.1 beta
+  # beta
   if (is.null(betaStart)) {
     gfit <- gldrm(formula      = formula,
                   data         = data,
@@ -132,7 +132,7 @@ dirglm <- function(formula, data=NULL, link="log", mb=NULL, Sb=NULL, dir_pr_parm
     }
   }
 
-  ### 5.2 f0
+  # f0
   if (is.null(f0Start)) {
     f0      <- rep(1 / l, l)
     tht0    <- gldrm:::getTheta(
@@ -148,7 +148,7 @@ dirglm <- function(formula, data=NULL, link="log", mb=NULL, Sb=NULL, dir_pr_parm
 
   init <- list(beta = betaStart, f0 = f0Start)
 
-  ## 4. Fit
+  # Fit
   fit <- dirglmFit(
     formula              = formula,
     X                    = X,
@@ -164,7 +164,7 @@ dirglm <- function(formula, data=NULL, link="log", mb=NULL, Sb=NULL, dir_pr_parm
     thetaControl         = thetaControl
   )
 
-  ## 5. Output
+  # Output
   out <- list(
     samples     = fit$samples,
     mb          = fit$mb,
