@@ -168,9 +168,10 @@ plot_dirglm <- function(
     if (is.null(xlim)) xlim <- range(x, finite = TRUE)
 
     plot(NA, xlim = xlim, ylim = ylim, xlab = xlab, ylab = ylab, main = main, ...)
-    xs <- c(x, rev(x)); ys <- c(upper, rev(lower))
-    polygon(xs, ys, border = NA, col = band_col)
-    lines(x, center, lwd = line_lwd, col = col)
+    segments(x0 = x, y0 = lower, x1 = x, y1 = upper, col = col, lwd = line_lwd)
+    cap_w <- 0.015 * diff(range(xlim))
+    segments(x - cap_w, upper, x + cap_w, upper, col = col, lwd = line_lwd)
+    segments(x - cap_w, lower, x + cap_w, lower, col = col, lwd = line_lwd)
     points(x, center, pch = point_pch, cex = point_cex, col = col)
 
     return(invisible(list(what="f0")))
