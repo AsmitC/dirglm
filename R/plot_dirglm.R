@@ -43,19 +43,19 @@
 #' @export
 plot_dirglm <- function(
     fit,
-    what = c("beta", "f0"), # One of these
-    pars = NULL,            # for beta: names or integer indices to plot
-    top_k = 6,              # if pars is NULL and p is large
+    what = c("beta", "f0"),
+    pars = NULL,
+    top_k = 6,
     order = c("magnitude", "variance", "none"),
     robust = FALSE,
     prob = 0.95,
     # beta density options
     dens_args = list(adjust = 1, n = 512, na.rm = TRUE),
-    common_xlim = FALSE,    # share x-scale across beta panels
-    ncol = NULL,            # layout for beta panels; auto if NULL
+    common_xlim = FALSE,
+    ncol = NULL,
     # aesthetics
     col = par("col"),
-    band_alpha = 0.25,      # alpha for shaded CrI
+    band_alpha = 0.25,
     line_lwd = 2,
     point_pch = 16,
     point_cex = 0.8,
@@ -75,7 +75,7 @@ plot_dirglm <- function(
 
   # Beta plotting (default)
   if (what == "beta") {
-    beta_draws <- as.matrix(fit$samples$beta)   # M x (p+1)
+    beta_samples <- as.matrix(fit$samples$beta)
     btab <- as.data.frame(s$beta)
 
     center_all <- setNames(btab[,"Estimate"], rownames(btab))
@@ -92,17 +92,17 @@ plot_dirglm <- function(
     } else if (is.character(pars)) keep_names <- pars
     else keep_names <- all_names[pars]
 
-    idx <- match(keep_names, colnames(beta_draws))
+    idx <- match(keep_names, colnames(beta_samples))
     k <- length(idx)
     if (is.null(ncol)) ncol <- ceiling(sqrt(k))
     nrow <- ceiling(k / ncol)
 
     if (common_xlim && is.null(xlim)) {
-      xr <- range(beta_draws[, idx, drop = FALSE], finite = TRUE)
+      xr <- range(beta_samples[, idx, drop = FALSE], finite = TRUE)
       xlim <- grDevices::extendrange(xr, f = 0.04)
     }
 
-    if (is.null(xlab)) xlab <- "Coefficient Value"
+    if (is.null(xlab)) xlab <- "Value"
     if (is.null(ylab)) ylab <- "Density"
     if (is.null(main)) {
       main <- sprintf("Posterior %s (%.0f%% CrI shaded)",
@@ -115,7 +115,7 @@ plot_dirglm <- function(
     # Plot each beta[j]
     for (j in seq_len(k)) {
       nm <- keep_names[j]
-      xj <- beta_draws[, idx[j]]
+      xj <- beta_samples[, idx[j]]
       dj <- do.call(stats::density, c(list(x = xj), dens_args))
       cj <- center_all[nm]
       lj <- lower_all[nm]
