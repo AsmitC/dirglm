@@ -51,6 +51,19 @@ dir_parm <- function(y, tht, btht, dir_pr_parm, ind_mt) {
   return(parm)
 }
 
+#' Title: function for log Dir pdf for x ~ Dir(a)
+#'
+#' @param x (vector) value at which to evaluate pdf
+#' @param a (vector) Dirichlet parameter
+#'
+#' @return (vector) log Dirichlet pdf
+#' @keywords internal
+lDir = function(x, a){
+  a0 = sum(a)
+  logB = sum(lgamma(a))-lgamma(a0)
+  f = sum( (a-1)*log(x) ) - logB
+  return(f)
+}
 
 #' Title: function for calculating \{f0(y_i), i = 1(1)n\}
 #'
@@ -66,7 +79,6 @@ f0y <- function(y, spt, f0) {
   f0_y <- colSums(f0 * ind_mt)
   return(f0_y)
 }
-
 
 #' Title: function for finding variance-covariance matrix of beta
 #'
@@ -89,7 +101,6 @@ Sigma_beta <- function(X, mu, bpr2, rho, linkfun, mu.eta) {
 
   return(Sigma)
 }
-
 
 #' Title: function for updating f0
 #'
@@ -137,12 +148,17 @@ f0_update <- function(y,
       pr_llik <- sum(pr_tht * y - pr_btht + log(pr_f0y))
       cr_llik <- sum(cr_tht * y - cr_btht + log(cr_f0y))
 
-      pr_pf0 <- extraDistr::ddirichlet(pr_f0, dir_pr_parm, log = T)                   # prior probability (proposal)
-      cr_pf0 <- extraDistr::ddirichlet(cr_f0, dir_pr_parm, log = T)                   # prior probability (current)
-      cr_qf0 <- extraDistr::ddirichlet(cr_f0, pr_dir_parm, log = T)
-      pr_qf0 <- extraDistr::ddirichlet(pr_f0, cr_dir_parm, log = T)
+      #pr_pf0 <- extraDistr::ddirichlet(pr_f0, dir_pr_parm, log = T)
+      #cr_pf0 <- extraDistr::ddirichlet(cr_f0, dir_pr_parm, log = T)
+      R_pf0 = sum((dir_pr_parm-1)*log(pr_f0/cr_f0))
 
-      alp <- min(0, (pr_llik - cr_llik + pr_pf0 - cr_pf0 + cr_qf0 - pr_qf0))
+      #cr_qf0 <- extraDistr::ddirichlet(cr_f0, pr_dir_parm, log = T)
+      #pr_qf0 <- extraDistr::ddirichlet(pr_f0, cr_dir_parm, log = T)
+      cr_qf0  <- lDir(cr_f0, pr_dir_parm)
+      pr_qf0  <- lDir(pr_f0, cr_dir_parm)
+
+      #alp <- min(0, (pr_llik - cr_llik + pr_pf0 - cr_pf0 + cr_qf0 - pr_qf0))
+      alp <- min(0, (pr_llik - cr_llik + R_pf0 + cr_qf0 - pr_qf0))
 
       if (log(runif(1)) < alp) {
         cr_f0   <- pr_f0

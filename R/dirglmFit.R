@@ -120,7 +120,10 @@ dirglmFit <- function(formula, data, X, y,                # Data
   else if   (!all(diag(Sb)) > 0)         stop("Sb must be positive definite.")
   else if (!all(Sb == diag(diag(Sb))))   Sbdiag <- FALSE
 
-  if (!Sbdiag) joint.update <- TRUE
+  if (!Sbdiag) {
+    joint.update <- TRUE
+    warning("Beta prior variance-covariance matrix is non-diagonal. Forcing joint update.")
+    }
   if (!joint.update) Sb <- diag(Sb)
 
   # Dirichlet prior
@@ -197,6 +200,8 @@ dirglmFit <- function(formula, data, X, y,                # Data
   p_acc_f0   <- n_acc_f0 / (iter - burnin)
   if (p_acc_beta < 0.01 || p_acc_f0 < 0.01) warning(paste0("Markov chain did not mix well. ",
                                                            "Consider changing rho or increasing the number of iterations."))
+  else if (p_acc_beta > 0.8 || p_acc_f0 > 0.8) warning(paste0("Acceptance ratios are high.",
+                                                              "Consider changing rho or increasing the number of iterations."))
 
   # Tilt each f0 sample
   f0star_samples <- matrix(0, nrow = nrow(f0_samples), ncol = length(spt))

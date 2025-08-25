@@ -9,7 +9,6 @@ License: `use_mit_license()`, `use_gpl3_license()` or friends to pick a
 URL: https://github.com/AsmitC/dir_glm
 BugReports: https://github.com/AsmitC/dir_glm/issues
 Imports: 
-    extraDistr,
     gldrm,
     mvtnorm
 Suggests: 
