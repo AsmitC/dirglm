@@ -200,7 +200,7 @@ dirglmFit <- function(formula, data, X, y,                # Data
   p_acc_f0   <- n_acc_f0 / (iter - burnin)
   if (p_acc_beta < 0.01 || p_acc_f0 < 0.01) warning(paste0("Markov chain did not mix well. ",
                                                            "Consider changing rho or increasing the number of iterations."))
-  else if (p_acc_beta > 0.8 || p_acc_f0 > 0.8) warning(paste0("Acceptance ratios are high.",
+  else if (p_acc_beta > 0.8 || p_acc_f0 > 0.8) warning(paste0("Acceptance ratios are high. ",
                                                               "Consider changing rho or increasing the number of iterations."))
 
   # Tilt each f0 sample
