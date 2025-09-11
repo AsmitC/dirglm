@@ -56,6 +56,15 @@
 #' \item \code{p_acc_f0} Proportion of accepted proposals for f0 during MCMC.
 #' }
 #'
+#' @examples
+#' set.seed(832)
+#' x <- rep(0:2, each=3)
+#' lam <- exp(0.3+0.6*x)
+#' y <- rpois(length(x), lam)
+#' dat <- data.frame(x, y)
+#' fit.test <- dirglm(y ~ x, data=dat)
+#' summary(fit.test)
+#'
 #' @export
 dirglm <- function(formula, data=NULL, link="log", mb=NULL, Sb=NULL, dir_pr_parm=NULL,
                    dirglmControl=dirglm.control(), thetaControl=theta.control())

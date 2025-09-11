@@ -21,13 +21,25 @@ tht_sol <- function(spt, f0, mu, thtst) {
     mu = mu,
     sampprobs = NULL,
     ySptIndex = NULL,
-    thetaStart = thtst
+    thetaStart = thtst,
+    thetaControl = gldrm:::theta.control(logsumexp=TRUE)
   )
   tht <- out$theta
   bpr2 <- out$bPrime2
-  btht <- apply(exp(outer(tht, spt, "*")), 1, function(row)
-    log(sum(row * f0)))
+  #btht <- apply(exp(outer(tht, spt, "*")), 1, function(row)
+    #log(sum(row * f0)))
+  lw   <- sweep(tcrossprod(out$theta, spt), 2, log(f0), "+")  # n x |spt|
+  btht <- apply(lw, 1, logSumExp)
   return(list(bpr2 = bpr2, tht = tht, btht = btht))
+}
+
+## Computes log(sum(exp(x))) with better precision
+logSumExp <- function(x)
+{
+  i <- which.max(x)
+  m <- x[i]
+  lse <- log1p(sum(exp(x[-i]-m))) + m
+  lse
 }
 
 
@@ -131,13 +143,14 @@ f0_update <- function(y,
                       ind_mt) {
   n <- length(y)
   l <- length(spt)
+  eps <- .Machine$double.eps
 
   for (j in 1:l) {
     pr_f0 <- cr_f0
     pr_f0[j] <- rbeta(1, cr_dir_parm[j], sum(cr_dir_parm[-j]))
     pr_f0[-j] <- pr_f0[-j] * (1 - pr_f0[j]) / sum(pr_f0[-j])
 
-    if (sum(pr_f0 < 1e-3) == 0) {
+    if (all(cr_mu > spt[1] + eps & cr_mu < spt[l] - eps)) {
       out <- tht_sol(spt, pr_f0, cr_mu, cr_tht)
       pr_tht <- out$tht
       pr_btht <- out$btht
@@ -148,17 +161,19 @@ f0_update <- function(y,
       pr_llik <- sum(pr_tht * y - pr_btht + log(pr_f0y))
       cr_llik <- sum(cr_tht * y - cr_btht + log(cr_f0y))
 
-      #pr_pf0 <- extraDistr::ddirichlet(pr_f0, dir_pr_parm, log = T)
-      #cr_pf0 <- extraDistr::ddirichlet(cr_f0, dir_pr_parm, log = T)
       R_pf0 = sum((dir_pr_parm-1)*log(pr_f0/cr_f0))
 
-      #cr_qf0 <- extraDistr::ddirichlet(cr_f0, pr_dir_parm, log = T)
-      #pr_qf0 <- extraDistr::ddirichlet(pr_f0, cr_dir_parm, log = T)
       cr_qf0  <- lDir(cr_f0, pr_dir_parm)
       pr_qf0  <- lDir(pr_f0, cr_dir_parm)
-
-      #alp <- min(0, (pr_llik - cr_llik + pr_pf0 - cr_pf0 + cr_qf0 - pr_qf0))
       alp <- min(0, (pr_llik - cr_llik + R_pf0 + cr_qf0 - pr_qf0))
+      if (is.na(alp)) {
+        message(sprintf("alp is NA in f0 update"))
+        message(sprintf("pr_llik: %f", pr_llik))
+        message(sprintf("cr_llik: %f", cr_llik))
+        message(sprintf("R_pf0: %f", R_pf0))
+        message(sprintf("cr_qf0: %f", cr_qf0))
+        message(sprintf("pr_qf0: %f", pr_qf0))
+      }
 
       if (log(runif(1)) < alp) {
         cr_f0   <- pr_f0
@@ -167,12 +182,8 @@ f0_update <- function(y,
         cr_f0y  <- pr_f0y
         cr_bpr2 <- pr_bpr2
         acc_f0  <- TRUE
-      } else {
-        acc_f0 <- FALSE
-      }
-    } else {
-      acc_f0 <- FALSE
-    } # Closes line 134
+      } else acc_f0 <- FALSE
+    } else acc_f0 <- FALSE # Closes line 141
   } # Closes line 129
   return(
     list(
@@ -261,6 +272,8 @@ beta_update_joint <- function(X,
     } else {
       acc_beta <- FALSE
     }
+  } else { # Closes line 226
+    acc_beta <- FALSE
   }
   return(list(
     cr_bt    = cr_bt,
@@ -349,6 +362,8 @@ beta_update_separate <- function(X,
       } else {
         acc_beta <- FALSE
       }
+    } else { # Closes line 316
+      acc_beta <- FALSE
     }
   }
   return(list(
