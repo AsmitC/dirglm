@@ -1,6 +1,15 @@
 ## Required packages -----
 ## gldrm, mvtnorm
 
+## Computes log(sum(exp(x))) with better precision
+logSumExp <- function(x)
+{
+  i <- which.max(x)
+  m <- x[i]
+  lse <- log1p(sum(exp(x[-i]-m))) + m
+  lse
+}
+
 #' Title: function for finding theta, btheta & bprime2
 #'
 #' @param spt (vector) support, \{s_j, j = 1(1)l\}, of response variable y
@@ -26,23 +35,10 @@ tht_sol <- function(spt, f0, mu, thtst) {
   )
   tht <- out$theta
   bpr2 <- out$bPrime2
-  #btht <- apply(exp(outer(tht, spt, "*")), 1, function(row)
-    #log(sum(row * f0)))
-  lw   <- sweep(tcrossprod(out$theta, spt), 2, log(f0), "+")  # n x |spt|
+  lw   <- sweep(tcrossprod(out$theta, spt), 2, log(f0), "+")
   btht <- apply(lw, 1, logSumExp)
   return(list(bpr2 = bpr2, tht = tht, btht = btht))
 }
-
-## Computes log(sum(exp(x))) with better precision
-logSumExp <- function(x)
-{
-  i <- which.max(x)
-  m <- x[i]
-  lse <- log1p(sum(exp(x[-i]-m))) + m
-  lse
-}
-
-
 
 #' Title: function for finding dirichlet proposal parameter
 #'
@@ -149,8 +145,10 @@ f0_update <- function(y,
     pr_f0 <- cr_f0
     pr_f0[j] <- rbeta(1, cr_dir_parm[j], sum(cr_dir_parm[-j]))
     pr_f0[-j] <- pr_f0[-j] * (1 - pr_f0[j]) / sum(pr_f0[-j])
+    c1 <- cr_mu > spt[1] + eps
+    c2 <- cr_mu < spt[l] - eps
 
-    if (all(cr_mu > spt[1] + eps & cr_mu < spt[l] - eps)) {
+    if (all(c1 & c2)) {
       out <- tht_sol(spt, pr_f0, cr_mu, cr_tht)
       pr_tht <- out$tht
       pr_btht <- out$btht
@@ -166,14 +164,6 @@ f0_update <- function(y,
       cr_qf0  <- lDir(cr_f0, pr_dir_parm)
       pr_qf0  <- lDir(pr_f0, cr_dir_parm)
       alp <- min(0, (pr_llik - cr_llik + R_pf0 + cr_qf0 - pr_qf0))
-      if (is.na(alp)) {
-        message(sprintf("alp is NA in f0 update"))
-        message(sprintf("pr_llik: %f", pr_llik))
-        message(sprintf("cr_llik: %f", cr_llik))
-        message(sprintf("R_pf0: %f", R_pf0))
-        message(sprintf("cr_qf0: %f", cr_qf0))
-        message(sprintf("pr_qf0: %f", pr_qf0))
-      }
 
       if (log(runif(1)) < alp) {
         cr_f0   <- pr_f0
