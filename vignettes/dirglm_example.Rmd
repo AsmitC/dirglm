@@ -15,7 +15,7 @@ knitr::opts_chunk$set(
 )
 ```
 
-Here, we will provide a few simulation examples for the `dirglm` function. Each function named `sim_dat_X` generates a data set corresponding to different instances of $\beta$, $f_0$, the link function, or some combination of those three. In what follows, each code section generates a data set from 
+Here, we will provide a few simulation examples for the `dirglm` function. Each function named `sim_dat_X` generates a data set corresponding to different instances of $\beta$, $f_0$, the link function, or some combination of those three. In what follows, each chunk generates a data set from a `sim_dat_X`, fits `dirglm`, and shows the relevant output.
 
 # Data-Generating Functions
 ```{r}
