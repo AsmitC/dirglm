@@ -36,7 +36,7 @@ dirglm.control <- function(burnin=100, thin=10, save=1000, rho=0.1,
   if (save   < 1 || floor(save)   != save)   stop("Number of saved iterations must be an integer >= 1")
   if (!(rho <= 1 & rho > 0))                 stop("rho must lie in (0, 1]")
   if (!is.logical(joint.update) ||
-      !joint.update %in% c(T, F))            stop("joint.update must be logical TRUE/FALSE")
+      !joint.update %in% c(TRUE, FALSE))            stop("joint.update must be logical TRUE/FALSE")
   ctrl <- list(burnin       = burnin,
                thin         = thin,
                save         = save,

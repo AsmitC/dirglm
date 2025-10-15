@@ -62,14 +62,18 @@
 #' lam <- exp(0.3+0.6*x)
 #' y <- rpois(length(x), lam)
 #' dat <- data.frame(x, y)
-#' fit.test <- dirglm(y ~ x, data=dat)
+#' fit.test <- dirglm(y ~ x, data=dat,
+#'                    dirglmControl=dirglm.control(burnin=10,thin=1,save=10))
 #' summary(fit.test)
 #'
 #' @export
-dirglm <- function(formula, data=NULL, link="log", mb=NULL, Sb=NULL, dir_pr_parm=NULL,
+dirglm <- function(formula, data=NULL, link="log", type=c("dpglm", "dirglm"), mb=NULL, Sb=NULL, dir_pr_parm=NULL,
                    dirglmControl=dirglm.control(), thetaControl=theta.control())
 
 {
+
+  type <- match.arg(type)
+
   # Model initialization
   mf <- stats::model.frame(formula, data)
   X  <- stats::model.matrix(attr(mf, "terms"), mf)
@@ -109,87 +113,134 @@ dirglm <- function(formula, data=NULL, link="log", mb=NULL, Sb=NULL, dir_pr_parm
         !is.vectorized(mu.eta, inveta.testdata)) stop("link must be vectorized.")
   }
 
-  # Initialize (theoretical) support if not provided by the user
-  spt <- dirglmControl$spt
-  if (is.null(spt)) spt <- sort(unique(y)) ## Observed support
-  if (is.unsorted(spt)) spt <- sort(spt)
-  l <- length(spt)
+  # DirGLM
+  if (type == "dirglm") {
 
-  # Initialize mu0 if not provided by the user
-  mu0 <- dirglmControl$mu0
-  if (is.null(mu0)) mu0 <- mean(y)
-  else if (mu0 <= min(spt) || mu0 >= max(spt)) {
-    stop(paste0("mu0 must lie within the range of observed values. Choose a different ",
-                "value or set mu0=NULL to use the default value, mean(y)."))
-  }
+    # Initialize (theoretical) support if not provided by the user
+    spt <- dirglmControl$spt
+    if (is.null(spt)) spt <- sort(unique(y)) ## Observed support
+    if (is.unsorted(spt)) spt <- sort(spt)
+    l <- length(spt)
 
-  # MCMC Initialization
-  betaStart    <- dirglmControl$betaStart
-  f0Start      <- dirglmControl$f0Start
-
-  # beta
-  if (is.null(betaStart)) {
-    gfit <- gldrm(formula      = formula,
-                  data         = data,
-                  link         = link,
-                  mu0          = mu0,
-                  thetaControl = thetaControl)
-    betaStart <- gfit$beta
-    if (any(is.na(betaStart))) {
-      lmcoef <- stats::lm.fit(x, linkfun(mu0))$coef
-      betaStart <- lmcoef
+    # Initialize mu0 if not provided by the user
+    mu0 <- dirglmControl$mu0
+    if (is.null(mu0)) mu0 <- mean(y)
+    else if (mu0 <= min(spt) || mu0 >= max(spt)) {
+      stop(paste0("mu0 must lie within the range of observed values. Choose a different ",
+                  "value or set mu0=NULL to use the default value, mean(y)."))
     }
+
+    # MCMC Initialization
+
+    # beta
+    betaStart <- dirglmControl$betaStart
+    if (is.null(betaStart)) {
+      gfit <- gldrm(formula      = formula,
+                    data         = data,
+                    link         = link,
+                    mu0          = mu0,
+                    thetaControl = thetaControl)
+      betaStart <- gfit$beta
+      if (any(is.na(betaStart))) {
+        lmcoef <- stats::lm.fit(x, linkfun(mu0))$coef
+        betaStart <- lmcoef
+      }
+    }
+
+    # f0
+    f0Start <- dirglmControl$f0Start
+    if (is.null(f0Start)) {
+      f0      <- rep(1 / l, l)
+      tht0    <- gldrm:::getTheta(
+        spt       = spt,
+        f0        = f0,
+        mu        = mu0,
+        sampprobs = NULL,
+        ySptIndex = NULL
+      )$theta
+      f0star  <- (f0 * exp(tht0 * spt)) / sum(f0 * exp(tht0 * spt))
+      f0Start <- f0star
+    }
+
+    init <- list(beta = betaStart, f0 = f0Start)
+
+    # Fit
+    fit <- dirglmFit(
+      formula              = formula,
+      X                    = X,
+      y                    = y,
+      link                 = link,
+      mb                   = mb,
+      Sb                   = Sb,
+      dir_pr_parm          = dir_pr_parm,
+      mu0                  = mu0,
+      spt                  = spt,
+      init                 = init,
+      dirglmControl        = dirglmControl,
+      thetaControl         = thetaControl
+    )
+
+    # Output
+    out <- list(
+      samples     = fit$samples,
+      mb          = fit$mb,
+      Sb          = fit$Sb,
+      dir_pr_parm = fit$dir_pr_parm,
+      formula     = formula,
+      type        = type,
+      data        = data.frame(mf),
+      link        = link,
+      spt         = fit$spt,
+      mu0         = fit$mu0,
+      burnin      = dirglmControl$burnin,
+      thin        = dirglmControl$thin,
+      save        = dirglmControl$save,
+      p_acc_beta  = fit$p_acc_beta,
+      p_acc_f0    = fit$p_acc_f0
+    )
+    class(out) <- "dirglm"
+  } # Closes line 148
+
+  # DPGLM
+  else {
+    min_y <- if(!is.null(dpglmControl$min_y)) dpglmControl$min_y else min(y)
+    max_y <- if(!is.null(dpglmControl$min_y)) dpglmControl$max_y else max(y)
+    mu0 <- if(!is.null(dpglmControl$mu0)) dpglmControl$mu0 else mean(y)
+
+    # MCMC Initialization
+
+    # beta
+    betaStart <- dpglmControl$betaStart
+    if (is.null(betaStart)) {
+      gfit <- gldrm(formula      = formula,
+                    data         = data,
+                    link         = link,
+                    mu0          = mu0,
+                    thetaControl = thetaControl)
+      betaStart <- gfit$beta
+      if (any(is.na(betaStart))) {
+        lmcoef <- stats::lm.fit(x, linkfun(mu0))$coef
+        betaStart <- lmcoef
+      }
+    }
+
+    # f0
+    f0Start <- dpglmControl$f0Start
+    if (is.null(f0Start)) {
+      f0      <- rep(1 / l, l)
+      tht0    <- gldrm:::getTheta(
+        spt       = spt,
+        f0        = f0,
+        mu        = mu0,
+        sampprobs = NULL,
+        ySptIndex = NULL
+      )$theta
+      f0star  <- (f0 * exp(tht0 * spt)) / sum(f0 * exp(tht0 * spt))
+      f0Start <- f0star
+    }
+
   }
 
-  # f0
-  if (is.null(f0Start)) {
-    f0      <- rep(1 / l, l)
-    tht0    <- gldrm:::getTheta(
-      spt       = spt,
-      f0        = f0,
-      mu        = mu0,
-      sampprobs = NULL,
-      ySptIndex = NULL
-    )$theta
-    f0star  <- (f0 * exp(tht0 * spt)) / sum(f0 * exp(tht0 * spt))
-    f0Start <- f0star
-  }
 
-  init <- list(beta = betaStart, f0 = f0Start)
-
-  # Fit
-  fit <- dirglmFit(
-    formula              = formula,
-    X                    = X,
-    y                    = y,
-    link                 = link,
-    mb                   = mb,
-    Sb                   = Sb,
-    dir_pr_parm          = dir_pr_parm,
-    mu0                  = mu0,
-    spt                  = spt,
-    init                 = init,
-    dirglmControl        = dirglmControl,
-    thetaControl         = thetaControl
-  )
-
-  # Output
-  out <- list(
-    samples     = fit$samples,
-    mb          = fit$mb,
-    Sb          = fit$Sb,
-    dir_pr_parm = fit$dir_pr_parm,
-    formula     = formula,
-    data        = data.frame(mf),
-    link        = link,
-    spt         = fit$spt,
-    mu0         = fit$mu0,
-    burnin      = dirglmControl$burnin,
-    thin        = dirglmControl$thin,
-    save        = dirglmControl$save,
-    p_acc_beta  = fit$p_acc_beta,
-    p_acc_f0    = fit$p_acc_f0
-  )
-  class(out) <- "dirglm"
   out
 }
