@@ -14,12 +14,6 @@
 #' \code{linkfun}, \code{linkinv}, and \code{mu.eta}. The first is the link
 #' function. The second is the inverse link function. The third is the derivative
 #' of the inverse link function. All three functions must be vectorized.
-#' @param mb Prior mean for beta. Defaults to a p-length vector whose entries are all 0.
-#' @param Sb Prior variance-covariance matrix for beta.
-#' Defaults to the p-dimensional identity matrix. See details for more information.
-#' @param dir_pr_parm Dirichlet prior parameter for f0. Defaults to the observed
-#' response frequency distribution. If specified, it should be a p-length vector
-#' with positive entries.
 #' @param dirglmControl Optional control arguments.
 #' Passed as an object of class "dirglmControl", which is constructed by the
 #' \code{dirglm.control} function.
@@ -67,8 +61,8 @@
 #' summary(fit.test)
 #'
 #' @export
-dirglm <- function(formula, data=NULL, link="log", type=c("dpglm", "dirglm"), mb=NULL, Sb=NULL, dir_pr_parm=NULL,
-                   dirglmControl=dirglm.control(), thetaControl=theta.control())
+dirglm <- function(formula, data=NULL, link="log", type=c("dpglm", "dirglm"),
+                   dirglmControl=dirglm.control(), dpglmControl=dpglm.control(), thetaControl=theta.control())
 
 {
 
@@ -170,9 +164,6 @@ dirglm <- function(formula, data=NULL, link="log", type=c("dpglm", "dirglm"), mb
       X                    = X,
       y                    = y,
       link                 = link,
-      mb                   = mb,
-      Sb                   = Sb,
-      dir_pr_parm          = dir_pr_parm,
       mu0                  = mu0,
       spt                  = spt,
       init                 = init,
@@ -203,43 +194,71 @@ dirglm <- function(formula, data=NULL, link="log", type=c("dpglm", "dirglm"), mb
 
   # DPGLM
   else {
-    min_y <- if(!is.null(dpglmControl$min_y)) dpglmControl$min_y else min(y)
-    max_y <- if(!is.null(dpglmControl$min_y)) dpglmControl$max_y else max(y)
+    spt <- if(!is.null(dpglmControl$spt)) dpglmControl$spt else c(min(y), max(y))
     mu0 <- if(!is.null(dpglmControl$mu0)) dpglmControl$mu0 else mean(y)
 
     # MCMC Initialization
-
-    # beta
-    betaStart <- dpglmControl$betaStart
-    if (is.null(betaStart)) {
+    betaStart    <- dpglmControl$betaStart
+    varbetaStart <- dpglmControl$varbetaStart
+    thetaStart   <- dpglmControl$thetaStart
+    crmStart     <- dpglmControl$crmStart
+    if (is.null(betaStart) || is.null(crmStart) ||
+      is.null(varbetaStart) || is.null(thetaStart)) {
       gfit <- gldrm(formula      = formula,
                     data         = data,
                     link         = link,
                     mu0          = mu0,
                     thetaControl = thetaControl)
-      betaStart <- gfit$beta
-      if (any(is.na(betaStart))) {
-        lmcoef <- stats::lm.fit(x, linkfun(mu0))$coef
-        betaStart <- lmcoef
+      
+      if (is.null(betaStart)) {
+        betaStart <- gfit$beta
+        if (any(is.na(betaStart))) {
+          lmcoef <- stats::lm.fit(x, linkfun(mu0))$coef
+          betaStart <- lmcoef
+       }
+      }
+      if(is.null(varbetaStart)) varbetaStart <- gfit$varbeta
+      if (is.null(thetaStart)) thetaStart <- gfit$theta
+      if (is.null(crmStart)) {
+        z.tldStart <- gfit$spt
+        J.tldStart <- gfit$f0
+        crmStart <- list(z.tld = z.tldStart, J.tld=J.tldStart)
       }
     }
 
-    # f0
-    f0Start <- dpglmControl$f0Start
-    if (is.null(f0Start)) {
-      f0      <- rep(1 / l, l)
-      tht0    <- gldrm:::getTheta(
-        spt       = spt,
-        f0        = f0,
-        mu        = mu0,
-        sampprobs = NULL,
-        ySptIndex = NULL
-      )$theta
-      f0star  <- (f0 * exp(tht0 * spt)) / sum(f0 * exp(tht0 * spt))
-      f0Start <- f0star
-    }
+    init <- list(beta = betaStart, varbeta=varbetaStart,
+                 theta = thetaStart, crm = crmStart)
 
-  }
+    # Fit
+    fit <- dpglmFit(formula      = formula,
+                    X            = X,
+                    y            = y,
+                    link         = link,
+                    mu0          = mu0,
+                    spt          = spt,
+                    init         = init,
+                    dpglmControl = dpglmControl,
+                    thetaControl = thetaControl)
+    
+    # Output
+    out <- list(
+      samples     = fit$samples,
+      #mb          = fit$mb,
+      #Sb          = fit$Sb,
+      formula     = formula,
+      type        = type,
+      data        = data.frame(mf),
+      link        = link,
+      spt         = fit$spt,
+      mu0         = fit$mu0,
+      burnin      = dpglmControl$burnin,
+      thin        = dpglmControl$thin,
+      save        = dpglmControl$save,
+      p_acc_beta  = fit$p_acc_beta,
+      p_acc_f0    = fit$p_acc_f0
+    )
+    class(out) <- "dpglm"
+  } # Closes line 205
 
 
   out

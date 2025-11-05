@@ -364,3 +364,354 @@ beta_update_separate <- function(X,
     acc_beta = acc_beta
   ))
 }
+
+
+#####################################
+# ALL FUNCTIOMS BELOW ARE FOR DPGLM #
+#####################################
+# -----------------------------------------------------------------------------#
+#                               Update z                                      #
+# -----------------------------------------------------------------------------#
+
+z_sampler_unifK <- function(y, c0, crm.atoms, crm.jumps, tht, min_y, max_y) {
+  n <- length(y)
+  eps <- 1e-6
+  lower <- crm.atoms - c0
+  upper <- crm.atoms + c0
+  # lower[lower < 0] <- 0
+  # upper[upper > 1] <- 1
+  lower[lower < min_y] <- min_y + eps  
+  upper[upper > max_y] <- max_y - eps
+  width <- upper - lower
+  z <- numeric(n)
+  for (i in 1:n) {
+    indices <- y[i] >= lower & y[i] <= upper
+    indx <- which(indices)
+    log_prob <- (1 / width[indx]) + (tht[i] * crm.atoms[indx]) + log(crm.jumps[indx])
+    prob <- exp(log_prob - max(log_prob))
+    if(sum(indices) == 1){
+      z[i] <- crm.atoms[indices]
+    } else {
+      z[i] <- sample(crm.atoms[indx], 1, prob = prob)
+    }
+  }
+  return(z)
+}
+
+c0_silverman <- function(y) {
+  n <- length(y)
+  sd_y <- sd(y)
+  iqr_y <- IQR(y)
+  return(0.9 * min(sd_y, iqr_y / 1.34) * n^(-1/5))
+}
+
+z_sampler_triK <- function(y, c0, crm.atoms, crm.jumps, tht) {
+  n <- length(y)
+  z <- numeric(n)
+  
+  for (i in 1:n) {
+    # Compute triangular kernel weights
+    tri_weight <- pmax(0, 1 - abs((y[i] - crm.atoms) / c0))
+    
+    # Compute log probabilities
+    log_prob <- log(tri_weight) + (tht[i] * crm.atoms) + log(crm.jumps)
+    
+    # Normalize and sample
+    prob <- exp(log_prob - max(log_prob))
+    prob <- prob / sum(prob)
+    
+    # Sample z[i] based on triangular kernel weighting
+    z[i] <- sample(crm.atoms, 1, prob = prob)
+  }
+  
+  return(z)
+}
+
+z_sampler_epanK <- function(y, c0, crm.atoms, crm.jumps, tht) {
+  n <- length(y)
+  z <- numeric(n)
+  
+  for (i in 1:n) {
+    # Compute Epanechnikov kernel weights
+    epan_weight <- (3/4) * (1 - ((y[i] - crm.atoms) / c0)^2)
+    epan_weight[abs(y[i] - crm.atoms) > c0] <- 0  # Ensure weights are 0 outside the range
+    
+    # Compute log probabilities
+    log_prob <- log(epan_weight) + (tht[i] * crm.atoms) + log(crm.jumps)
+    
+    # Normalize and sample
+    prob <- exp(log_prob - max(log_prob))
+    prob <- prob / sum(prob)  
+    
+    # Sample z[i] based on Epanechnikov kernel weighting
+    z[i] <- sample(crm.atoms, 1, prob = prob)
+  }
+  
+  return(z)
+}
+
+
+# -----------------------------------------------------------------------------#
+#                               Resample z                                     #
+# -----------------------------------------------------------------------------#
+
+resample_zstar <- function(z){
+  z_table <- table(z)
+  zstar   <- as.numeric(names(z_table))
+  nstar   <- as.numeric(z_table)
+  ## Write code for resampling zstar to avoid the ‘sticky clusters effect’
+  
+  return(list(zstar = zstar, nstar = nstar))
+}
+
+logpost_beta <- function(beta, linkinv, z, X, atoms, jumps, mu_beta, sigma_beta){
+  n <- length(z)
+  #mu <- exp(X %*% beta) / (1 + exp(X %*% beta))
+  # mu <- plogis(X %*% beta) # E old
+  mu <- linkinv(X %*% beta)
+  theta <- gldrm:::getTheta(spt = atoms, f0 = jumps, mu = mu, 
+                            ySptIndex = NULL, sampprobs = NULL)$theta
+  btheta <- b_theta(theta, atoms, jumps)
+  log_post <- sum(theta * z - btheta) - sum((beta - mu_beta)^2 / (2 * sigma_beta^2)) # others const in beta
+  return(log_post)
+}
+
+loglik <- function(linkinv, z, X, beta, atoms, jumps){
+  n <- length(z)
+  #mu <- exp(X %*% beta) / (1 + exp(X %*% beta))   
+  # mu <- plogis(X %*% beta) # E old
+  mu <- linkinv(X %*% beta)
+  theta <- gldrm:::getTheta(spt = atoms, f0 = jumps, mu = mu, ySptIndex = NULL, 
+                            sampprobs = NULL)$theta
+  
+  btheta <- b_theta(theta, atoms, jumps) 
+  
+  f0_z <- numeric(n)
+  for (i in 1:n) {
+    f0_z[i] <- sum(jumps[z[i] == atoms])
+  }
+  loglik <- sum(theta * z - btheta + log(f0_z))
+  return(loglik)
+}
+
+
+log_post_u <- function(u, zstar, nstar, theta, alpha, min_y, max_y) {
+  # Number of grid points for the continuous part
+  R <- 250
+  eps <- 1e-6
+  
+  # Construct a grid for integration over the continuous part (G_0, uniform on (0,1))
+  #z_grid <- seq(eps, 1 - eps, length.out = R)
+  z_grid <- seq(min_y + eps, max_y - eps, length.out = R)
+  diff_z <- diff(z_grid)[1]  # uniform grid spacing
+  
+  # ---- Continuous part ----
+  # For each grid point v in z_grid, compute in a stabilized manner:
+  #    log(1 + sum_i u_i * exp(theta_i * v))
+  cont_vals <- sapply(z_grid, function(v) {
+    A <- log(u) + theta * v
+    max_A <- max(A)
+    S <- exp(max_A) * sum(exp(A - max_A))
+    log1p(S)  # log(1+S) computed in a numerically stable way
+  })
+  
+  # Riemann-sum approximation of the integral over the continuous part:
+  integral_continuous <- sum(cont_vals) * diff_z
+  
+  # ---- Discrete part ----
+  # For each unique atom in zstar, with multiplicity given by nstar,
+  # compute: nstar * log(1 + sum_i u_i * exp(theta_i * zstar))
+  disc_vals <- sapply(zstar, function(v) {
+    A <- log(u) + theta * v
+    max_A <- max(A)
+    S <- exp(max_A) * sum(exp(A - max_A))
+    log1p(S)
+  })
+  
+  sum_discrete <- sum(disc_vals * nstar)
+  
+  # Combine the continuous and discrete contributions
+  neg_log_post <- alpha * integral_continuous + sum_discrete
+  
+  return(-neg_log_post)
+}
+
+sampler_u <- function(u, zstar, nstar, theta, alpha, delta, min_y, max_y) {
+  n <- length(u) # Get the length of u
+  
+  for (i in seq_len(n)) {
+    u_star <- u
+    # Sample from Gamma distribution: shape = delta, scale = u[i] / delta
+    u_star[i] <- rgamma(1, shape = delta, scale = u[i] / delta)
+    
+    # Compute logQ_ratio: log(q(ui | ui_star)) - log(q(ui_star | ui))
+    logQ_ratio <- dgamma(u[i], shape = delta, scale = u_star[i] / delta, log = TRUE) - 
+      dgamma(u_star[i], shape = delta, scale = u[i] / delta, log = TRUE)
+    
+    # Compute logratio
+    logratio <- log_post_u(u_star, zstar, nstar, theta, alpha, min_y, max_y) - 
+      log_post_u(u, zstar, nstar, theta, alpha, min_y, max_y) + logQ_ratio
+    
+    # Metropolis-Hastings acceptance step
+    if (log(runif(1)) < logratio) {
+      u[i] <- u_star[i]
+    } # else, u[i] remains unchanged
+  }
+  
+  return(u)
+}
+
+# --------------------------------------------------------------------------- #
+#                          For beta update                                   #
+# --------------------------------------------------------------------------- #
+
+#' Compute b(theta) for discrete base measure
+#'
+#' Calculates \eqn{b(\theta) = \log \left( \int \exp(\theta z) dG_0(z) \right)} for a discrete base measure \eqn{G_0}
+#' with support points \code{spt} and weights \code{f0}, using log-sum-exp trick for numerical stability.
+#'
+#' @param theta Numeric vector of parameter values.
+#' @param spt Numeric vector of support points for the base measure.
+#' @param f0 Numeric vector of weights or density values at each support point.
+#'
+#' @return Numeric vector of \eqn{b(\theta)} values, one for each \code{theta}.
+#' @export
+
+b_theta <- function(theta, spt, f0) {
+  log_f0 <- log(f0) # log density values
+  
+  # Create the log weights matrix of dimensions length(theta) x length(spt)
+  # (i, j)th element is theta[i]*spt[j] + log(f0[j])
+  log_weights <- outer(theta, spt, "*") +
+    matrix(log_f0, nrow = length(theta), ncol = length(spt), byrow = TRUE)
+  
+  # Use log-sum-exp trick to compute b(theta) for each theta
+  result <- apply(log_weights, 1, function(x) {
+    m <- max(x)
+    m + log(sum(exp(x - m)))
+  })
+  
+  return(as.vector(result))  # Ensure the output is a vector
+}
+
+# --------------------------------------------------------------------------- #
+#                               CRM update                                   #
+# --------------------------------------------------------------------------- #
+
+crm_sampler <- function(M, u, zstar, nstar, tht, alpha, min_y, max_y){
+  N <- 3001
+  R <- 3001
+  eps <- 1e-6
+  s <- -log(seq(exp(-eps), exp(-5e-4), length.out = N))
+  
+  # Sorted, ascending order, needed in RL
+  #z <- seq(eps, 1 - eps, length.out = R)
+  z <- seq(min_y + eps, max_y - eps, length.out = R)
+  
+  # Assume u is a vector and z is the grid where you want to compute psi_z.
+  # Here we compute psi_z for each grid point z[j] by summing over u.
+  
+  # Compute a matrix of log-terms:
+  log_terms <- outer(log(u), z, function(lu, z_val) lu + tht * z_val)
+  
+  # Now compute psi_z using the log-sum-exp trick along the u dimension (rows):
+  psi_z <- apply(log_terms, 2, function(log_vec) {
+    max_val <- max(log_vec)
+    exp(max_val + log(sum(exp(log_vec - max_val))))
+  })
+  
+  
+  # Assume:
+  #   psi_z: vector of length R computed as before over the z grid
+  #   s: vector of length N representing the s grid
+  #   eps: small positive number for numerical boundaries
+  dz <- (1 - 2 * eps) / (R - 1)   # Grid spacing for the uniform measure
+  
+  # Preallocate the result vector
+  fnS <- numeric(length(s))
+  
+  for (j in seq_along(s)) {
+    # For a fixed s[j], the integrand at each z is:
+    #    f(z, s[j]) = exp( -(1+psi_z) * s[j] ) / s[j]
+    # Taking logs gives:
+    #    log f(z, s[j]) = -(1+psi_z) * s[j] - log(s[j])
+    log_vals <- -(1 + psi_z) * s[j] - log(s[j])
+    
+    # Use the log-sum-exp trick for the summation over z grid:
+    max_val <- max(log_vals)
+    log_sum_exp <- max_val + log(sum(exp(log_vals - max_val)))
+    
+    # Multiply by the grid spacing to approximate the integral:
+    log_integral <- log(dz) + log_sum_exp
+    
+    # Store the stabilized value (exponentiating back)
+    fnS[j] <- exp(log_integral)
+  }
+  
+  
+  ds <- diff(s)
+  h <- (fnS[-N] + fnS[-1]) / 2
+  Nv <- rev(cumsum(rev(ds * h)))
+  Nv <- Nv * alpha
+  Nv <- c(Nv, 0)
+  
+  
+  #Generate random jumps RJ and random locations RL
+  xi <- cumsum(rexp(M, rate = 1.0))
+  RJ <- numeric(M)
+  iNv <- N - 1
+  
+  for (i in seq_len(M)) {
+    while (iNv > 0 && Nv[iNv] < xi[i]) {
+      iNv <- iNv - 1
+    }
+    RJ[i] <- s[iNv + 1]
+  }
+  
+  
+  RL <- numeric(M)
+  for (m in seq_len(M)) {
+    xi_rl <- runif(1)
+    # Compute log probabilities: log_temp = -(1 + psi_z) * RJ[m]
+    log_temp <- -(1 + psi_z) * RJ[m]
+    
+    # Stabilize by subtracting the maximum log value
+    max_log <- max(log_temp)
+    
+    # Convert to probabilities in a numerically stable way
+    p <- exp(log_temp - max_log)
+    p <- p / sum(p)
+    
+    # Compute the cumulative probabilities
+    cumsum_p <- cumsum(p)
+    
+    # Select the index where the cumulative sum exceeds xi_rl
+    RL[m] <- z[min(which(cumsum_p > xi_rl))]
+  }
+  
+  
+  # Second Part: random jumps [for fixed locations]
+  # Suppose u is a vector and zstar is a vector.
+  # We want to compute, for each fixed zstar[j]:
+  #   psi_star[j] = sum(u_i * exp(tht * zstar[j]))
+  # We'll compute it in a numerically stable way:
+  
+  # Create a matrix of log-terms: each element is log(u_i) + tht * zstar[j]
+  log_terms <- outer(log(u), zstar, function(lu, z) lu + tht * z)
+  
+  # For each column (corresponding to a fixed zstar), use the log-sum-exp trick
+  psi_star <- sapply(seq_along(zstar), function(j) {
+    max_val <- max(log_terms[, j])
+    exp(max_val + log(sum(exp(log_terms[, j] - max_val))))
+  })
+  
+  
+  Jstar <- rgamma(length(zstar), shape = nstar, rate = psi_star + 1)
+  
+  return(list(
+    RL = RL,
+    RJ = RJ,
+    zstar = zstar,
+    Jstar = Jstar
+  ))
+}

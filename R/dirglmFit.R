@@ -8,13 +8,19 @@
 #' @param thin Factor by which to thin MCMC iterations. Defaults to 10.
 #' @param save Number of MCMC samples to return. Defaults to 1000.
 #' @param rho MCMC update step size. A scalar in \eqn{(0, 1]}. Defaults to 0.1.
+#' @param mb Prior mean for beta. Defaults to a p-length vector whose entries are all 0.
+#' @param Sb Prior variance-covariance matrix for beta.
+#' Defaults to the p-dimensional identity matrix. See details for more information.
+#' @param dir_pr_parm Dirichlet prior parameter for f0. Defaults to the observed
+#' response frequency distribution. If specified, it should be a p-length vector
+#' with positive entries.
+#' @param gamma Shrinkage parameter for the (default) prior variance on \code{beta}.
+#' Defaults to 1. Will not be used if \code{Sb} is specified in \code{dirglm}.
 #' @param mu0 Mean of the reference distribution. The reference distribution is
 #' not unique unless its mean is restricted to a specific value. This value can
 #' be any number within the range of observed values, but values near the boundary
 #' may cause numerical instability. This is an optional argument with \code{mean(y)}
 #' being the default value.
-#' @param gamma Shrinkage parameter for the (default) prior variance on \code{beta}.
-#' Defaults to 1. Will not be used if \code{Sb} is specified in \code{dirglm}.
 #' @param spt Theoretical support of the response variable.
 #' @param betaStart Initial value for the regression coefficients \code{beta}.
 #' Defaults to the output obtained by fitting \code{gldrm}.
@@ -28,6 +34,7 @@
 #'
 #' @export
 dirglm.control <- function(burnin=100, thin=10, save=1000, rho=0.1,
+                           mb=NULL, Sb=NULL, dir_pr_parm=NULL,
                            gamma=1, mu0=NULL, spt=NULL,
                            betaStart=NULL, f0Start=NULL, joint.update=TRUE, seed=NULL)
 {
@@ -36,11 +43,14 @@ dirglm.control <- function(burnin=100, thin=10, save=1000, rho=0.1,
   if (save   < 1 || floor(save)   != save)   stop("Number of saved iterations must be an integer >= 1")
   if (!(rho <= 1 & rho > 0))                 stop("rho must lie in (0, 1]")
   if (!is.logical(joint.update) ||
-      !joint.update %in% c(TRUE, FALSE))            stop("joint.update must be logical TRUE/FALSE")
+      !joint.update %in% c(TRUE, FALSE))     stop("joint.update must be logical TRUE/FALSE")
   ctrl <- list(burnin       = burnin,
                thin         = thin,
                save         = save,
                rho          = rho,
+               mb           = mb,
+               Sb           = Sb,
+               dir_pr_parm  = dir_pr_parm,
                gamma        = gamma,
                mu0          = mu0,
                spt          = spt,
@@ -53,13 +63,10 @@ dirglm.control <- function(burnin=100, thin=10, save=1000, rho=0.1,
 }
 
 #' Main MCMC function
-#'
 #' This function is called by the main \code{dirglm} function.
-#'
 #' @keywords internal
 dirglmFit <- function(formula, data, X, y,                # Data
                       link,                               # Link
-                      mb, Sb, dir_pr_parm,                # Priors
                       mu0, spt, init,                     # Specs
                       dirglmControl, thetaControl)        # Controls
 {
@@ -68,6 +75,9 @@ dirglmFit <- function(formula, data, X, y,                # Data
   thin         <- dirglmControl$thin
   save         <- dirglmControl$save
   rho          <- dirglmControl$rho
+  mb           <- dirglmControl$mb
+  Sb           <- dirglmControl$Sb
+  dir_pr_parm  <- dirglmControl$dir_pr_parm
   gamma        <- dirglmControl$gamma
   joint.update <- dirglmControl$joint.update
   seed         <- dirglmControl$seed

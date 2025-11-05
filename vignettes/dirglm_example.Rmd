@@ -142,7 +142,7 @@ sim_dat_4 <- function(n, p, seed=100) {
 spt <- 0:5
 mu0 <- 1
 data <- sim_dat_1(n = 500, p = 2)
-dir_glm.fit <- dirglm(y ~ X2, data=data, dirglmControl=dirglm.control(mu0=mu0, spt=spt, rho=1))
+dir_glm.fit <- dirglm(y ~ X2, data=data, type="dirglm", dirglmControl=dirglm.control(mu0=mu0, spt=spt, rho=1))
 beta_samples <- dir_glm.fit$samples$beta
 f0_samples <- dir_glm.fit$samples$f0
 colMeans(beta_samples)        # true beta is c(-0.7, 0.2)
@@ -155,7 +155,7 @@ colMeans(f0_samples)          # true f0 is truncated Poisson = (0.368, 0.368, 0.
 spt <- 0:5
 mu0 <- 1
 data <- sim_dat_2(n = 500, p = 2)
-dir_glm.fit <- dirglm(y ~ X2, data=data, dirglmControl=dirglm.control(mu0=mu0, spt=spt, rho=1))
+dir_glm.fit <- dirglm(y ~ X2, data=data, type="dirglm", dirglmControl=dirglm.control(mu0=mu0, spt=spt, rho=1))
 beta_samples <- dir_glm.fit$samples$beta
 f0_samples <- dir_glm.fit$samples$f0
 colMeans(beta_samples)        # true beta is c(-0.7, 0.2)
@@ -175,7 +175,7 @@ link <- list(
   mu.eta  <- function(eta) 5 * plogis(eta) * (1 - plogis(eta))
 )
 names(link) <- c("linkfun", "linkinv", "mu.eta")
-dir_glm.fit <- dirglm(y ~ X2 + X3, data=data, link=link,
+dir_glm.fit <- dirglm(y ~ X2 + X3, data=data, link=link, type="dirglm",
                       dirglmControl=dirglm.control(mu0=mu0, spt=spt, rho=1))
 beta_samples <- dir_glm.fit$samples$beta
 f0_samples <- dir_glm.fit$samples$f0
@@ -189,7 +189,7 @@ colMeans(f0_samples)          # true f0 is binomial = (0.031, 0.156, 0.313, 0.31
 spt <- 0:10
 mu0 <- 5
 data <- sim_dat_4(n = 500, p = 5)
-dir_glm.fit <- dirglm(y ~ X2 + X3 + X4 + X5, data=data, link="identity",
+dir_glm.fit <- dirglm(y ~ X2 + X3 + X4 + X5, data=data, link="identity", type="dirglm",
                         dirglmControl=dirglm.control(mu0=mu0, spt=spt, rho=1))
 beta_samples <- dir_glm.fit$samples$beta
 f0_samples <- dir_glm.fit$samples$f0
