@@ -196,3 +196,101 @@ f0_samples <- dir_glm.fit$samples$f0
 colMeans(beta_samples)        # true beta is c(5, 2, 0, 0, 0)
 colMeans(f0_samples)          # true f0 is uniform = (0.1, 0.1, 0.1, ..., 0.1)
 ```
+
+# Some dpglm testing
+
+```{r}
+# Simulation III ---------------------------------------------------------------------
+f0_true_kde <- readRDS("../DPGLM/DPGLM - only R/Code/sim_truth/f0_true_kde.rds")
+spt <- f0_true_kde$spt
+f0_kde  <- f0_true_kde$f0 / sum(f0_true_kde$f0)
+true_beta <- c(-0.7, 0.2)
+
+true_beta <- c(1, 0)
+
+# A: expit was not written before. Is this right?
+expit <- function(x) {
+  1 / (1 + exp(-x))
+}
+
+sim_I <- function(n) {
+  X     <- cbind(1, runif(n, -sqrt(12) / 4, sqrt(12) / 4))
+  X[, -1] <- scale(X[, -1])
+  beta <- true_beta
+  mu <- as.numeric(expit(X %*% beta))
+  theta <- gldrm:::getTheta(
+    spt = spt,
+    f0  = f0_kde,
+    mu  = mu,
+    sampprobs  = NULL,
+    ySptIndex  = NULL,
+    thetaStart = NULL
+  )$theta
+  btheta <- b_theta(theta, spt, f0_kde)
+  X       <- X %>% as.matrix()
+  fY <- t(sapply(1:n, function(i) {
+    exp(theta[i] * spt - btheta[i]) * f0_kde
+  }))
+  Y     <- sapply(1:n, function(i) {
+    sample(spt, 1, prob = fY[i, ])
+  })
+  # btheta <- theta <- rep(0, n)
+  # fY <- t(sapply(1:n, function(i) {
+  #   f0_kde
+  # }))
+  # Y     <- sapply(1:n, function(i) {
+  #   sample(spt, 1, prob = fY[i, ])
+  # })
+  return(data.frame(Y, theta = theta, X))
+}
+
+
+sim_III <- function(n) {
+  X     <- cbind(1, runif(n, -sqrt(12) / 4, sqrt(12) / 4))
+  X[, -1] <- scale(X[, -1])
+  beta <- true_beta
+  mu <-  exp(X %*% beta) / (1 + exp(X %*% beta))
+  theta <- gldrm:::getTheta(
+    spt = spt,
+    f0  = f0_kde,
+    mu  = mu,
+    sampprobs  = NULL,
+    ySptIndex  = NULL,
+    thetaStart = NULL
+  )$theta
+  
+ # theta <- rmvnorm(1, mean = theta, sigma = 2 * diag(n)) %>% as.numeric()
+  
+  btheta <- b_theta(theta, spt, f0_kde)
+  X       <- X %>% as.matrix()
+  fY <- t(sapply(1:n, function(i) {
+    exp(theta[i] * spt - btheta[i]) * f0_kde
+  }))
+  Y     <- sapply(1:n, function(i) {
+    sample(spt, 1, prob = fY[i, ])
+  })
+  return(data.frame(Y, theta = theta, X))
+}
+
+truth <- list(beta = true_beta, 
+              f0 = matrix(c(spt, f0_kde), 
+                          ncol = 2, 
+                          byrow = FALSE))
+
+# Simulate Data ---------------------------------------------------------------------
+dat <- sim_III(25)
+dat <- sim_I(250)
+y <- dat[, 1]
+#hist(y)
+mu0 <- mean(y)
+true_theta <- dat[, 2]
+X <- dat[, -c(1,2)]
+datfram <- data.frame(X1=X$X1, X2=X$X2, y=y)
+
+model <- dirglm(y ~ X2, data=datfram, link="logit", type="dpglm", dpglmControl=dpglm.control(burnin=100,thin=1,save=5000))
+colMeans(model$samples$beta) # Truth is c(1, 0)
+mean(sapply(model$samples$crm$z.tld, mean)) # Truth is 0.5
+mean(sapply(model$samples$crm$J.tld, mean)) # Truth is 0.001 (or 0?)
+model$p_acc_beta
+model$p_acc_f0
+```

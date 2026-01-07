@@ -7,10 +7,10 @@
 #' @param burnin Number of burn-in MCMC iterations. Defaults to 100.
 #' @param thin Factor by which to thin MCMC iterations. Defaults to 10.
 #' @param save Number of MCMC samples to return. Defaults to 1000.
-#' @param rho MCMC update step size. A scalar in \eqn{(0, 1]}. Defaults to 0.1.
+#' @param rho MCMC update step size. Either a single number or a vector matching
+#' the length of \code{beta}.
 #' @param mb Prior mean for beta. Defaults to a p-length vector whose entries are all 0.
-#' @param Sb Prior variance-covariance matrix for beta.
-#' Defaults to the p-dimensional identity matrix. See details for more information.
+#' @param Sb Vector containing the diagonal entries in the prior variance-covariance matrix for beta.
 #' @param gamma Shrinkage parameter for the (default) prior variance on \code{beta}.
 #' Defaults to 1. Will not be used if \code{Sb} is specified in \code{dirglm}.
 #' @param mu0 Mean of the reference distribution. The reference distribution is
@@ -18,8 +18,8 @@
 #' be any number within the range of observed values, but values near the boundary
 #' may cause numerical instability. This is an optional argument with \code{mean(y)}
 #' being the default value.
-#' @param spt Theoretical support of the response variable. Should be a vector of length 2.
-#' Defaults to \code{c(min(y), max(y))}. 
+#' @param spt Theoretical support of the response variable. Defaults to the
+#' empirical distribution of \code{y}.
 #' @param betaStart Initial value for the regression coefficients \code{beta}.
 #' Defaults to the output obtained by fitting \code{gldrm}.
 #' @param crmStart Initial value for the reference distribution.
@@ -29,22 +29,24 @@
 #' @return Object of S3 class "dpglmControl"
 #'
 #' @export
-dpglm.control <- function(burnin=100, thin=10, save=1000, rho=0.1,
+dpglm.control <- function(burnin=100, thin=10, save=1000, #rho=NULL,
+                          mb=NULL, Sb=NULL,
                           M=20, alpha=1, delta=2, c0=NULL,
-                          gamma=1, mu0=NULL, spt=NULL,
+                          gamma=1, mu0=NULL, spt=NULL, H=NULL,
                           betaStart=NULL, varbetaStart=NULL, thetaStart=NULL, crmStart=NULL,
-                          seed=NULL)
+                          seed=NULL) #, add H, flag 
 {
   if (burnin < 0 || floor(burnin) != burnin) stop("Number of burn-in samples must be an integer >= 0")
   if (thin   < 1 || floor(thin)   != thin)   stop("Thin must be an integer >= 1")
   if (save   < 1 || floor(save)   != save)   stop("Number of saved iterations must be an integer >= 1")
-  if (!(rho <= 1 & rho > 0))                 stop("rho must lie in (0, 1]")
-  if (length(spt) != 2)                      stop("Support must be a vector of length 2")
-  if(spt[1] > spt[2])                        stop("spt[1] must be less than or equal to spt[2]")
+  #if (!(rho <= 1 & rho > 0))                 stop("rho must lie in (0, 1]")
+  #if (length(spt) != 2)                      stop("Support must be a vector of length 2")
   ctrl <- list(burnin       = burnin,
                thin         = thin,
                save         = save,
-               rho          = rho,
+               #rho          = rho,
+               mb           = mb,
+               Sb           = Sb,
                M            = M,
                alpha        = alpha,
                delta        = delta,
@@ -52,6 +54,7 @@ dpglm.control <- function(burnin=100, thin=10, save=1000, rho=0.1,
                gamma        = gamma,
                mu0          = mu0,
                spt          = spt,
+               H            = H,
                betaStart    = betaStart,
                varbetaStart = varbetaStart,
                thetaStart   = thetaStart,
@@ -74,13 +77,22 @@ dpglmFit <- function(formula, data, X, y,        # Data
   burnin       <- dpglmControl$burnin
   thin         <- dpglmControl$thin
   save         <- dpglmControl$save
-  rho          <- dpglmControl$rho
+  #rho          <- dpglmControl$rho
+  mb           <- dpglmControl$mb
+  Sb           <- dpglmControl$Sb
   M            <- dpglmControl$M
   alpha        <- dpglmControl$alpha
   delta        <- dpglmControl$delta
   c0           <- dpglmControl$c0
   gamma        <- dpglmControl$gamma
+  #H            <- dpglmControl$H
   seed         <- dpglmControl$seed
+
+  #if (!is.null(H)) {
+    #if (class(H) != "function") stop("H must be of class function.")
+  #} else {
+    #H <- function(...) return 0
+  #}
 
   if (!is.null(seed)) set.seed(seed)
   
@@ -91,15 +103,25 @@ dpglmFit <- function(formula, data, X, y,        # Data
   linkinv <- link$linkinv
   mu.eta  <- link$mu.eta
 
-  # Extract spt
-  min_y <- spt[1]
-  max_y <- spt[2]
-
   # MCMC Initialization
-  X    <- as.matrix(X, nrow=n)
   n    <- length(y)
+  X    <- as.matrix(X, nrow=n)
   p    <- dim(X)[2]
+  l    <- length(spt)
   iter <- burnin + thin * save
+
+  # Extract support bounds
+  if (is.unsorted(spt)) spt <- sort(spt)
+  r <- diff(range(spt))
+  min_y <- spt[1] - .05 * r
+  max_y <- spt[l] + .05 * r
+
+  # Verify MCMC step size
+  #if (!is.null(rho)) {
+    #rho <- as.numeric(rho)
+    #if (length(rho) == 1) rho <- rep(rho, p) # Scalar rho
+    #else if (length(rho) != p) stop("length(rho) must match the number of betas.")
+  #} else rho <- rep(1, p) # Defaults to no step size scaling
 
   beta_samples <- matrix(NA, nrow = iter, ncol = p)
   theta_samples <- matrix(NA, nrow = iter, ncol = n)
@@ -107,14 +129,14 @@ dpglmFit <- function(formula, data, X, y,        # Data
   crm_samples   <- list()
   lnlik_samples <- numeric(iter)
 
-  gldrm_fit <- gldrm(y ~ X[, -1], link = link) # E old
+  # gldrm_fit <- gldrm(y ~ X[, -1], link = link) # E old
   beta_samples[1, ] <- beta <- as.numeric(init$beta)
   beta_mode <- beta
   #beta_cov <- gldrm_fit$varbeta # What to do about this
   beta_cov <- init$varbeta # this
   meanY_x <- linkinv(X %*% beta)
-  z.tld <- z_tld <-  as.numeric(init$crmStart$z.tld)
-  J.tld <- J_tld <- as.numeric(init$crmStart$J.tld)
+  z.tld <- z_tld <-  as.numeric(init$crm$z.tld)
+  J.tld <- J_tld <- as.numeric(init$crm$J.tld)
   crm_samples[[1]] <- list(z.tld = z.tld, J.tld = J.tld)
 
   ord <- order(J_tld)[1:M]
@@ -150,17 +172,61 @@ dpglmFit <- function(formula, data, X, y,        # Data
   )$theta
   #Jtld_0 <- exp(theta0 * z.tld) * J.tld / sum(exp(theta0 * z.tld) * J.tld)
   temp <- exp(theta0 * z.tld - max(theta0 * z.tld))
+  # Adding H, something like
+  # tilt <- H(...)
+  # term <- theta0 * z.tld + tilt
+  #temp <- exp(term - max(term))
   Jtld_0 <- (temp * J.tld) / sum(temp * J.tld)
   lnlik_samples[1] <- lnlik <- loglik(linkinv = linkinv, z = z, X = X, beta = beta, atoms = z.tld, jumps = Jtld_0)
 
+  # Beta prior
+  if (is.null(mb)) {
+    mprime  <- spt[1] + (spt[2] - spt[1]) * 0.25
+    Mprime  <- spt[l - 1] + (spt[l] - spt[l - 1]) * 0.75
+    gmprime <- linkfun(mprime)
+    gMprime <- linkfun(Mprime)
+    mid_spt <- (gmprime + gMprime) / 2
+    mb <- c(mid_spt, rep(0, p-1))
+  }
+  else if (length(mb) != p) stop("length(mb) must match the number of covariates.")
+
+  Sbdiag <- TRUE
+  if (is.null(Sb)) {
+    mprime  <- spt[1] + (spt[2] - spt[1]) * 0.25
+    Mprime  <- spt[l - 1] + (spt[l] - spt[l - 1]) * 0.75
+    gmprime <- linkfun(mprime)
+    gMprime <- linkfun(Mprime)
+    sdX     <- c(apply(as.matrix(X[, -1], nrow=n), 2, sd))
+    Sbvec   <- (gMprime - gmprime)^2 * c(100, (gamma / (2 * sdX))^2) # Re-scaling on the linear-predictor scale
+    #Sb      <- diag(Sbvec)
+    Sb <- Sbvec # Entries corresponding to the diagonal of beta prior cov
+  } else if (length(Sb) != p) stop("length(Sb) must match the number of betas.")
+  else if (any(Sb <= 0)) stop("Sb must be positive definite.")
+
+  ### A: below few comments are really old (dirglm), probably entirely unnecessary
+  #else if (!all(dim(Sb)   == c(p, p))) stop("dim(Sb) must match the number of covariates.")
+  #else if   (!all(diag(Sb)) > 0)         stop("Sb must be positive definite.")
+  #else if (!all(Sb == diag(diag(Sb))))   Sbdiag <- FALSE
+
+  #if (!Sbdiag) {
+    #joint.update <- TRUE
+    #warning("Beta prior variance-covariance matrix is non-diagonal. Forcing joint update.")
+    #}
+  #if (!joint.update) Sb <- diag(Sb)
+
+
   for(itr in 2:iter){
+    message(sprintf("Starting iter: %d", itr))
     # Optimization to find the mode
     result <- tryCatch({
       optim(par = beta, fn = logpost_beta, linkinv = linkinv, z = z, X = X,
-            atoms = z.tld, jumps  = J.tld, mu_beta = mu_beta,
-            sigma_beta = sigma_beta,
+            atoms = z.tld, jumps  = J.tld, mu_beta = mb, # Used to be mu_beta
+            sigma_beta = Sb, # Used to be sigma_beta
             control = list(fnscale = -1), hessian = TRUE)
-    }, error = function(e) return(NULL))  # If error occurs, return NULL
+    }, error = function(e) {
+      message(e)
+      return(NULL)
+    })  # If error occurs, return NULL
     
     # Check if `optim()` failed
     if (!is.null(result) && is.finite(det(result$hessian))) {
@@ -173,7 +239,8 @@ dpglmFit <- function(formula, data, X, y,        # Data
       
       # Only proceed if covariance matrix is valid and positive definite
       if (!is.null(beta_cov_)) {
-        beta_cov_ <- diag(scale_factors) %*% beta_cov_ %*% diag(scale_factors)
+        #beta_cov_ <- diag(scale_factors) %*% beta_cov_ %*% diag(scale_factors) # E old
+        #beta_cov_ <- diag(rho) %*% beta_cov_ %*% diag(rho)
         # Check positive semi-definiteness
         if (all(eigen(beta_cov_, symmetric = TRUE, only.values = TRUE)$values >= 
                 -sqrt(.Machine$double.eps))) {
@@ -196,11 +263,11 @@ dpglmFit <- function(formula, data, X, y,        # Data
             
             # Compute log-posterior values
             cr_logpost_beta <- logpost_beta(beta = beta, linkinv = linkinv, z = z, X = X, atoms = z.tld, 
-                                            jumps  = J.tld, mu_beta = mu_beta, 
-                                            sigma_beta = sigma_beta)
+                                            jumps  = J.tld, mu_beta = mb, # Used to be mu_beta
+                                            sigma_beta = Sb) # Used to be sigma_beta
             pr_logpost_beta <- logpost_beta(beta = beta_, linkinv = linkinv, z = z, X = X, atoms = z.tld, 
-                                            jumps  = J.tld, mu_beta = mu_beta, 
-                                            sigma_beta = sigma_beta)
+                                            jumps  = J.tld, mu_beta = mb, # Used to be mu_beta
+                                            sigma_beta = Sb) # Used to be sigma_beta
             
             # Metropolis-Hastings acceptance step
             log_acc_prob <- pr_logpost_beta - cr_logpost_beta + cr_logprop_beta - pr_logprop_beta
@@ -214,10 +281,10 @@ dpglmFit <- function(formula, data, X, y,        # Data
           }
         } 
       }
-    }
+    } else message("  `optim()` failed on this iteration")
     # If `optim()` fails, keep beta as it is and continue to next step.
-    
     # theta update ------------------------------------
+    #message(paste0("Last error here, getTheta for theta_tilde"))
     theta_tilde <- gldrm:::getTheta(
       spt = z.tld,
       f0  = J.tld,
@@ -228,9 +295,10 @@ dpglmFit <- function(formula, data, X, y,        # Data
     )$theta
     
     theta <- theta_tilde
-    
+    message("  theta updated successfully")
     # u update ----------------------------------------
     u <- sampler_u(u, zstar, nstar, theta, alpha, delta, min_y, max_y)
+    message("  u updated successfully")
     
     # CRM update --------------------------------------
     crm_star <- crm_sampler(M, u, zstar, nstar, theta, alpha, min_y, max_y)
@@ -252,7 +320,8 @@ dpglmFit <- function(formula, data, X, y,        # Data
       b2 <- b_theta(theta_tilde, z.tld, J.tld)
       b3 <- b_theta(theta_tilde_star, z.tld, J.tld)
       b4 <- b_theta(theta_tilde, z.tld_star, J.tld_star)
-      log_r <- log(exp(sum(2*(theta_tilde_star - theta_tilde)*z - b1 + b2 - b3 + b4)))
+      # log_r <- log(exp(sum(2*(theta_tilde_star - theta_tilde)*z - b1 + b2 - b3 + b4))) E old
+      log_r <- sum(2*(theta_tilde_star - theta_tilde)*z - b1 + b2 - b3 + b4)
       
       if(log(runif(1)) < log_r){
         count2 <- count2 + 1
@@ -266,19 +335,20 @@ dpglmFit <- function(formula, data, X, y,        # Data
       }
     }
     
-
+    message("  crm updated successfully")
     # z update ------------------------------------------------------------------
     z <- z_sampler_unifK(y, c0, z.tld, J.tld, theta, min_y, max_y)
-    
+    message("  z updated successfully")
     # zstar and nstar update ----------------------------------------------------
     resampled_z <- resample_zstar(z)
     zstar <- resampled_z$zstar
     nstar <- resampled_z$nstar
+    message("  zstar, nstar updated successfully")
     
     theta0 <- gldrm:::getTheta(
       spt = z.tld,
       f0  = J.tld,
-      mu  = m0,
+      mu  = mu0, # Used to be m0
       sampprobs  = NULL,
       ySptIndex  = NULL,
       thetaStart = NULL
@@ -287,6 +357,7 @@ dpglmFit <- function(formula, data, X, y,        # Data
     temp <- exp(theta0 * z.tld - max(theta0 * z.tld))
     Jtld_0 <- (temp * J.tld) / sum(temp * J.tld)
     lnlik <- loglik(linkinv = linkinv, z = z, X = X, beta = beta, atoms = z.tld, jumps = Jtld_0)
+    message("  loglik calculated successfully")
     
     # Storing MCMC simulations --------------------------------------------------
     z_samples[itr, ] <- z
@@ -296,19 +367,20 @@ dpglmFit <- function(formula, data, X, y,        # Data
     crm_samples[[itr]] <- list(z.tld = z.tld, J.tld = J.tld)
     lnlik_samples[itr] <- lnlik
   }
-
+  
+  crm_samples <- data.frame(
+  z.tld = I(lapply(crm_samples, `[[`, "z.tld")),
+  J.tld = I(lapply(crm_samples, `[[`, "J.tld")))
   samples <- list(z = z_samples, beta = beta_samples, crm = crm_samples)
   
   # A: Add priors to this later?
   # Control params?
   # iter? So people dont have to calculate?
-  dpglm_fit <- list(samples    = samples,
-                    spt        = spt,
-                    mu0        = mu0,
-                    p_acc_beta = count1 / iter,
-                    p_acc_crm  = count2 / iter)
-  
-  
-  out <- list(data = dat, dpglm = dpglm_fit)
-  return(out)
+  list(samples    = samples,
+       mb         = mb,
+       Sb         = Sb,
+       spt        = spt,
+       mu0        = mu0,
+       p_acc_beta = count1 / iter,
+       p_acc_crm  = count2 / iter)
 }

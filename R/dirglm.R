@@ -194,7 +194,6 @@ dirglm <- function(formula, data=NULL, link="log", type=c("dpglm", "dirglm"),
 
   # DPGLM
   else {
-    spt <- if(!is.null(dpglmControl$spt)) dpglmControl$spt else c(min(y), max(y))
     mu0 <- if(!is.null(dpglmControl$mu0)) dpglmControl$mu0 else mean(y)
 
     # MCMC Initialization
@@ -226,8 +225,12 @@ dirglm <- function(formula, data=NULL, link="log", type=c("dpglm", "dirglm"),
       }
     }
 
-    init <- list(beta = betaStart, varbeta=varbetaStart,
-                 theta = thetaStart, crm = crmStart)
+    init <- list(beta=betaStart, varbeta=varbetaStart,
+                 theta=thetaStart, crm=crmStart)
+    
+    spt <- dpglmControl$spt
+    eps <- .Machine$double.eps
+    if (is.null(spt)) spt <- c(min(y) - eps, max(y) + eps)
 
     # Fit
     fit <- dpglmFit(formula      = formula,
@@ -243,8 +246,8 @@ dirglm <- function(formula, data=NULL, link="log", type=c("dpglm", "dirglm"),
     # Output
     out <- list(
       samples     = fit$samples,
-      #mb          = fit$mb,
-      #Sb          = fit$Sb,
+      mb          = fit$mb,
+      Sb          = fit$Sb,
       formula     = formula,
       type        = type,
       data        = data.frame(mf),
@@ -255,8 +258,9 @@ dirglm <- function(formula, data=NULL, link="log", type=c("dpglm", "dirglm"),
       thin        = dpglmControl$thin,
       save        = dpglmControl$save,
       p_acc_beta  = fit$p_acc_beta,
-      p_acc_f0    = fit$p_acc_f0
+      p_acc_f0    = fit$p_acc_crm
     )
+
     class(out) <- "dpglm"
   } # Closes line 205
 
