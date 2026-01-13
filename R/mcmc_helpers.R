@@ -373,9 +373,9 @@ beta_update_separate <- function(X,
 #                               Update z                                      #
 # -----------------------------------------------------------------------------#
 
-z_sampler_unifK <- function(y, c0, crm.atoms, crm.jumps, tht, min_y, max_y) { # add arg H
+z_sampler_unifK <- function(y, c0, crm.atoms, crm.jumps, tht, min_y, max_y, eps) { # add arg H
   n <- length(y)
-  eps <- 1e-6
+  #eps <- 1e-6
   lower <- crm.atoms - c0
   upper <- crm.atoms + c0
   # lower[lower < 0] <- 0
@@ -500,10 +500,9 @@ loglik <- function(linkinv, z, X, beta, atoms, jumps){
 }
 
 
-log_post_u <- function(u, zstar, nstar, theta, alpha, min_y, max_y) { # add arg H
+log_post_u <- function(u, zstar, nstar, theta, alpha, min_y, max_y, eps) { # add arg H
   # Number of grid points for the continuous part
   R <- 250
-  eps <- 1e-6
   
   # Construct a grid for integration over the continuous part (G_0, uniform on (0,1))
   #z_grid <- seq(eps, 1 - eps, length.out = R)
@@ -545,7 +544,7 @@ log_post_u <- function(u, zstar, nstar, theta, alpha, min_y, max_y) { # add arg 
   return(-neg_log_post)
 }
 
-sampler_u <- function(u, zstar, nstar, theta, alpha, delta, min_y, max_y) {
+sampler_u <- function(u, zstar, nstar, theta, alpha, delta, min_y, max_y, eps) {
   n <- length(u) # Get the length of u
   
   for (i in seq_len(n)) {
@@ -558,8 +557,8 @@ sampler_u <- function(u, zstar, nstar, theta, alpha, delta, min_y, max_y) {
       dgamma(u_star[i], shape = delta, scale = u[i] / delta, log = TRUE)
     
     # Compute logratio
-    logratio <- log_post_u(u_star, zstar, nstar, theta, alpha, min_y, max_y) - 
-      log_post_u(u, zstar, nstar, theta, alpha, min_y, max_y) + logQ_ratio
+    logratio <- log_post_u(u_star, zstar, nstar, theta, alpha, min_y, max_y, eps) - 
+      log_post_u(u, zstar, nstar, theta, alpha, min_y, max_y, eps) + logQ_ratio
     
     # Metropolis-Hastings acceptance step
     if (log(runif(1)) < logratio) {
@@ -611,10 +610,9 @@ b_theta <- function(theta, spt, f0) { # Add arg H, type?
 #                               CRM update                                   #
 # --------------------------------------------------------------------------- #
 
-crm_sampler <- function(M, u, zstar, nstar, tht, alpha, min_y, max_y){ # Add arg H
+crm_sampler <- function(M, u, zstar, nstar, tht, alpha, min_y, max_y, eps){ # Add arg H
   N <- 3001
   R <- 3001
-  eps <- 1e-6
   s <- -log(seq(exp(-eps), exp(-5e-4), length.out = N))
   
   # Sorted, ascending order, needed in RL
@@ -724,7 +722,13 @@ crm_sampler <- function(M, u, zstar, nstar, tht, alpha, min_y, max_y){ # Add arg
     exp(max_val + log(sum(exp(log_terms[, j] - max_val))))
   })
   
-  
+  # Plausibility check: check alpha and beta, check if mean is alpha/beta or alpha*beta
+  # and check if mean is too big or too close to 0
+  # Update: Looks like mean is too big
+  # Looks like the issue is not nstar, but psi_star being huge since sum(nstar) = 25
+  # Even more deep search finds that theta is actually whats huge, making log terms huge
+  #message("Jstar check:", "sum(nstar) =", sum(nstar), "rate (psistar) =", psi_star)
+ #  message("max(theta):", max(tht))
   Jstar <- rgamma(length(zstar), shape = nstar, rate = psi_star + 1)
   
   return(list(

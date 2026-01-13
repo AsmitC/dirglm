@@ -18,6 +18,7 @@
 #' be any number within the range of observed values, but values near the boundary
 #' may cause numerical instability. This is an optional argument with \code{mean(y)}
 #' being the default value.
+#' @param eps Padding for the theoretical support. Defaults to 1e-6.
 #' @param spt Theoretical support of the response variable. Defaults to the
 #' empirical distribution of \code{y}.
 #' @param betaStart Initial value for the regression coefficients \code{beta}.
@@ -29,10 +30,10 @@
 #' @return Object of S3 class "dpglmControl"
 #'
 #' @export
-dpglm.control <- function(burnin=100, thin=10, save=1000, #rho=NULL,
+dpglm.control <- function(burnin=100, thin=10, save=1000,
                           mb=NULL, Sb=NULL,
                           M=20, alpha=1, delta=2, c0=NULL,
-                          gamma=1, mu0=NULL, spt=NULL, H=NULL,
+                          gamma=1, mu0=NULL, spt=NULL, H=NULL, flag=c("dp", "cdp", "ods"), eps=1e-6,
                           betaStart=NULL, varbetaStart=NULL, thetaStart=NULL, crmStart=NULL,
                           seed=NULL) #, add H, flag 
 {
@@ -44,7 +45,6 @@ dpglm.control <- function(burnin=100, thin=10, save=1000, #rho=NULL,
   ctrl <- list(burnin       = burnin,
                thin         = thin,
                save         = save,
-               #rho          = rho,
                mb           = mb,
                Sb           = Sb,
                M            = M,
@@ -55,6 +55,8 @@ dpglm.control <- function(burnin=100, thin=10, save=1000, #rho=NULL,
                mu0          = mu0,
                spt          = spt,
                H            = H,
+               flag         = flag,
+               eps          = eps,
                betaStart    = betaStart,
                varbetaStart = varbetaStart,
                thetaStart   = thetaStart,
@@ -77,7 +79,6 @@ dpglmFit <- function(formula, data, X, y,        # Data
   burnin       <- dpglmControl$burnin
   thin         <- dpglmControl$thin
   save         <- dpglmControl$save
-  #rho          <- dpglmControl$rho
   mb           <- dpglmControl$mb
   Sb           <- dpglmControl$Sb
   M            <- dpglmControl$M
@@ -85,14 +86,27 @@ dpglmFit <- function(formula, data, X, y,        # Data
   delta        <- dpglmControl$delta
   c0           <- dpglmControl$c0
   gamma        <- dpglmControl$gamma
-  #H            <- dpglmControl$H
+  H            <- dpglmControl$H
+  flag         <- dpglmControl$flag
+  eps          <- dpglmControl$eps
   seed         <- dpglmControl$seed
 
   #if (!is.null(H)) {
-    #if (class(H) != "function") stop("H must be of class function.")
+    #if (class(H) != "function") stop("H must be a.")
   #} else {
-    #H <- function(...) return 0
+    # Set H based on flag
+    # if flag is closest to  "dpglm" then make H = 0 for all inputs
+    # Else, define H as some default
   #}
+
+  if (is.null(flag)) flag <- "dpglm"
+  flag <- match.arg(as.character(flag), choices = c("dpglm", "copula", "ods"))
+
+  if (is.null(H) || flag == "dpglm") H <- function(...) 0
+  else { # H is non-null and model is copula or ods
+    if (class(H) != "function") stop("H must be a function.")
+    # Now that H is definitely a function, handle copula/ods cases separately
+  }
 
   if (!is.null(seed)) set.seed(seed)
   
@@ -113,8 +127,8 @@ dpglmFit <- function(formula, data, X, y,        # Data
   # Extract support bounds
   if (is.unsorted(spt)) spt <- sort(spt)
   r <- diff(range(spt))
-  min_y <- spt[1] - .05 * r
-  max_y <- spt[l] + .05 * r
+  min_y <- spt[1] - eps # A: make eps later?
+  max_y <- spt[l] + eps # A: same here
 
   # Verify MCMC step size
   #if (!is.null(rho)) {
@@ -145,7 +159,7 @@ dpglmFit <- function(formula, data, X, y,        # Data
   RJ <- J_tld[ord]
   #theta_samples[1, ] <- theta <- true_theta #gldrm_fit$theta %>% as.numeric() # What to do about this
   theta_samples[1, ] <- theta <- init$theta # this
-  z_samples[1, ] <- z <- z_sampler_unifK(y, c0, z.tld, J.tld, theta, min_y, max_y)
+  z_samples[1, ] <- z <- z_sampler_unifK(y, c0, z.tld, J.tld, theta, min_y, max_y, eps)
 
   btheta <- b_theta(theta, z.tld, J.tld)
   
@@ -158,9 +172,7 @@ dpglmFit <- function(formula, data, X, y,        # Data
   Jstar <- rgamma(n = length(nstar), shape = nstar, rate = 1)
   
   count1 <- count2 <- 0
-  #scale_factors <- c(1.5, 2.5) %>% sqrt() # A: Using rho instead?
-  # Could allow rho to be either a scalar (specify rep(rho, p))
-  # Or a vector of length(p). Need to relax (0, 1) requirement then.
+  #scale_factors <- c(1.5, 2.5) %>% sqrt()
 
   theta0 <- gldrm:::getTheta(
     spt = z.tld,
@@ -284,7 +296,6 @@ dpglmFit <- function(formula, data, X, y,        # Data
     } else message("  `optim()` failed on this iteration")
     # If `optim()` fails, keep beta as it is and continue to next step.
     # theta update ------------------------------------
-    #message(paste0("Last error here, getTheta for theta_tilde"))
     theta_tilde <- gldrm:::getTheta(
       spt = z.tld,
       f0  = J.tld,
@@ -297,11 +308,11 @@ dpglmFit <- function(formula, data, X, y,        # Data
     theta <- theta_tilde
     message("  theta updated successfully")
     # u update ----------------------------------------
-    u <- sampler_u(u, zstar, nstar, theta, alpha, delta, min_y, max_y)
+    u <- sampler_u(u, zstar, nstar, theta, alpha, delta, min_y, max_y, eps)
     message("  u updated successfully")
     
     # CRM update --------------------------------------
-    crm_star <- crm_sampler(M, u, zstar, nstar, theta, alpha, min_y, max_y)
+    crm_star <- crm_sampler(M, u, zstar, nstar, theta, alpha, min_y, max_y, eps)
     z.tld_star <- c(crm_star$RL, crm_star$zstar)
     J.tld_star <- c(crm_star$RJ, crm_star$Jstar)
     
@@ -337,13 +348,12 @@ dpglmFit <- function(formula, data, X, y,        # Data
     
     message("  crm updated successfully")
     # z update ------------------------------------------------------------------
-    z <- z_sampler_unifK(y, c0, z.tld, J.tld, theta, min_y, max_y)
+    z <- z_sampler_unifK(y, c0, z.tld, J.tld, theta, min_y, max_y, eps)
     message("  z updated successfully")
     # zstar and nstar update ----------------------------------------------------
     resampled_z <- resample_zstar(z)
     zstar <- resampled_z$zstar
     nstar <- resampled_z$nstar
-    message("  zstar, nstar updated successfully")
     
     theta0 <- gldrm:::getTheta(
       spt = z.tld,
@@ -364,6 +374,7 @@ dpglmFit <- function(formula, data, X, y,        # Data
     u_samples[itr, ] <- u
     beta_samples[itr,] <- beta
     theta_samples[itr, ] <- theta
+    message("max(theta) = ", max(theta))
     crm_samples[[itr]] <- list(z.tld = z.tld, J.tld = J.tld)
     lnlik_samples[itr] <- lnlik
   }
