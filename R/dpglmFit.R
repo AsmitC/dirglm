@@ -109,13 +109,17 @@ dpglmFit <- function(formula, data, X, y,        # Data
   if (flag == "dpglm") h <- h_ <- hstar <- 0
   
   else if (flag == "copula") {
-    if (is.null(copula$group_index)) stop("For copula DPGLM, must specify group indices via 'group_index'.")
+    if (is.null(copula$group_index)) stop("For copula DPGLM, must specify group indices as 'group_index'.")
     group_index <- copula$group_index
     if (length(copula$group_index) != n) stop("length(group_index) must equal n.")
     
-    if (is.null(copula$rho)) stop("For copula DPGLM, must specify rho.")
+    if (is.null(copula$rho)) stop("For copula DPGLM, must specify rho as `rho`.")
     rho <- copula$rho
     if (!is.numeric(rho) || rho < 0 || rho > 1) stop("rho must be a scalar in (0, 1)")
+    
+    if (is.null(copula$rho_proposal_sd)) stop("For copula DPGLM, must specify rho proposal sd as `rho_proposal_sd`")
+    rho_proposal_sd <- copula$rho_proposal_sd
+    if (!is.numeric(rho_proposal_sd) || rho_proposal_sd < 0) stop("rho_proposal_sd must be a nonnegative real number")
   }
 
   if (!is.null(seed)) set.seed(seed)
@@ -230,7 +234,7 @@ dpglmFit <- function(formula, data, X, y,        # Data
     result <- tryCatch({
       optim(par = beta, fn = logpost_beta, linkinv = linkinv, z = z, X = X,
             atoms = z.tld, jumps  = J.tld, mu_beta = mb, # Used to be mu_beta
-            sigma_beta = Sb, # Used to be sigma_beta
+            sigma_beta = Sb, h = h, # Used to be sigma_beta
             control = list(fnscale = -1), hessian = TRUE)
     }, error = function(e) {
       message(e)
@@ -248,8 +252,6 @@ dpglmFit <- function(formula, data, X, y,        # Data
       
       # Only proceed if covariance matrix is valid and positive definite
       if (!is.null(beta_cov_)) {
-        #beta_cov_ <- diag(scale_factors) %*% beta_cov_ %*% diag(scale_factors) # E old
-        #beta_cov_ <- diag(rho) %*% beta_cov_ %*% diag(rho)
         # Check positive semi-definiteness
         if (all(eigen(beta_cov_, symmetric = TRUE, only.values = TRUE)$values >= 
                 -sqrt(.Machine$double.eps))) {
@@ -271,9 +273,9 @@ dpglmFit <- function(formula, data, X, y,        # Data
             cr_logprop_beta <- dmvnorm(x = beta, mean = beta_mode_, sigma = beta_cov_, log = TRUE)
             
             # Compute log-posterior values
-            if (flag == "copula") h = copula_contribution_by_group(y, group_index, rho,
-                                       crm.atoms = z.tld, crm.jumps = J.tld, theta, c0,
-                                       min_y, max_y)
+            if (flag == "copula") h <- log_copula_contribution_by_obs(y, group_index, rho,
+                                                                      crm.atoms = z.tld, crm.jumps = J.tld, theta, c0,
+                                                                      min_y, max_y)
             
             cr_logpost_beta <- logpost_beta(beta = beta, linkinv = linkinv, z = z, X = X, atoms = z.tld, 
                                             jumps  = J.tld, mu_beta = mb,
@@ -288,9 +290,9 @@ dpglmFit <- function(formula, data, X, y,        # Data
                                        thetaStart = theta
                                       )$theta
             
-              h_ <- copula_contribution_by_group(y, group_index, rho,
-                                                 crm.atoms = z.tld, crm.jumps = J.tld, theta_, c0,
-                                                 min_y, max_y)
+              h_ <- log_copula_contribution_by_obs(y, group_index, rho,
+                                                   crm.atoms = z.tld, crm.jumps = J.tld, theta_, c0,
+                                                   min_y, max_y)
             }
             
             pr_logpost_beta <- logpost_beta(beta = beta_, linkinv = linkinv, z = z, X = X, atoms = z.tld, 
@@ -330,9 +332,9 @@ dpglmFit <- function(formula, data, X, y,        # Data
     message("  theta updated successfully")
 
     # h update ------------------------------------
-    if (flag == "copula") h <- copula_contribution_by_group(y, group_index, rho,
-                                                            crm.atoms = z.tld, crm.jumps = J.tld, theta, c0,
-                                                            min_y, max_y)
+    if (flag == "copula") h <- log_copula_contribution_by_obs(y, group_index, rho,
+                                                              crm.atoms = z.tld, crm.jumps = J.tld, theta, c0,
+                                                              min_y, max_y)
     
     # u update ----------------------------------------
     u <- sampler_u(u, zstar, nstar, theta, alpha, delta, min_y, max_y, eps, h)
@@ -360,9 +362,9 @@ dpglmFit <- function(formula, data, X, y,        # Data
         warning("Capped some values of Theta at 20. Consider increasing M.")
       }
 
-      if (flag == "copula") h_star <- copula_contribution_by_group(y, group_index, rho,
-                                            crm.atoms = z.tld_star, crm.jumps = J.tld_star, theta = theta_tilde_star, c0,
-                                            min_y, max_y)
+      if (flag == "copula") h_star <- log_copula_contribution_by_obs(y, group_index, rho,
+                                                                    crm.atoms = z.tld_star, crm.jumps = J.tld_star, theta = theta_tilde_star, c0,
+                                                                    min_y, max_y)
       
       b1 <- b_theta(theta_tilde_star, z.tld_star, J.tld_star)
       b2 <- b_theta(theta_tilde, z.tld, J.tld)
@@ -405,6 +407,25 @@ dpglmFit <- function(formula, data, X, y,        # Data
       theta0[idx] <- 20
       warning("Capped some values of Theta at 20. Consider increasing M.")
     }
+
+    # (copula) rho update ----------------------------------------------------------------
+    if (flag == "copula"){
+      rho_prop <- plogis(qlogis(rho) + rnorm(1, 0, rho_proposal_sd))
+      # log posterior
+      logpost_current <- log_post_rho(rho, h)
+      h_ = log_copula_contribution_by_obs(y, group_index, rho_prop,
+                                          crm.atoms = z.tld, crm.jumps = J.tld, theta, c0,
+                                          min_y, max_y)
+      logpost_prop <- log_post_rho(rho_prop, h_)
+      
+      # Jacobian correction
+      log_jacobian <- log(rho_prop * (1 - rho_prop)) - log(rho * (1 - rho))
+      log_r <- logpost_prop - logpost_current + log_jacobian
+      
+      if (log(runif(1)) < log_r) {
+        rho = rho_prop
+      } 
+    }
     
     temp <- exp(theta0 * z.tld - max(theta0 * z.tld))
     Jtld_0 <- (temp * J.tld) / sum(temp * J.tld)
@@ -418,6 +439,7 @@ dpglmFit <- function(formula, data, X, y,        # Data
     theta_samples[itr, ] <- theta
     message("max(theta) = ", max(theta))
     crm_samples[[itr]] <- list(z.tld = z.tld, J.tld = J.tld)
+    if (flag == "copula") rho_samples[itr] <- rho
     lnlik_samples[itr] <- lnlik
   }
   
