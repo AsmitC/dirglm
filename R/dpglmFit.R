@@ -32,9 +32,9 @@
 #' @export
 dpglm.control <- function(burnin=100, thin=10, save=1000,
                           mb=NULL, Sb=NULL,
-                          M=20, alpha=1, delta=2, c0=NULL,
-                          gamma=1, mu0=NULL, spt=NULL, H=NULL, flag=c("dpglm", "copula", "ods"), eps=1e-6,
-                          # If flag = copula, require group index (perhaps check in fit function?)
+                          M=50, alpha=1, delta=2, c0=NULL,
+                          gamma=1, mu0=NULL, spt=NULL, flag=c("dpglm", "copula", "ods"), eps=1e-6,
+                          copula=list(),
                           betaStart=NULL, varbetaStart=NULL, thetaStart=NULL, crmStart=NULL,
                           seed=NULL) #, add H, flag 
 {
@@ -54,9 +54,9 @@ dpglm.control <- function(burnin=100, thin=10, save=1000,
                gamma        = gamma,
                mu0          = mu0,
                spt          = spt,
-               H            = H,
                flag         = flag,
                eps          = eps,
+               copula       = copula,
                betaStart    = betaStart,
                varbetaStart = varbetaStart,
                thetaStart   = thetaStart,
@@ -86,33 +86,10 @@ dpglmFit <- function(formula, data, X, y,        # Data
   delta        <- dpglmControl$delta
   c0           <- dpglmControl$c0
   gamma        <- dpglmControl$gamma
-  H            <- dpglmControl$H
   flag         <- dpglmControl$flag
   eps          <- dpglmControl$eps
+  copula       <- dpglmControl$copula
   seed         <- dpglmControl$seed
-
-  #if (!is.null(H)) {
-    #if (class(H) != "function") stop("H must be a.")
-  #} else {
-    # Set H based on flag
-    # if flag is closest to  "dpglm" then make H = 0 for all inputs
-    # Else, define H as some default
-  #}
-
-  if (is.null(H) || flag == "dpglm") H <- function(...) 0
-  else { # H is non-null and model is copula or ods
-    if (class(H) != "function") stop("H must be a function.")
-    # Now that H is definitely a function, handle copula/ods cases separately
-  }
-
-  if (!is.null(seed)) set.seed(seed)
-  
-  if(is.null(c0)) c0 <- c0_silverman(y) / 4
-  
-  # Extract link
-  linkfun <- link$linkfun
-  linkinv <- link$linkinv
-  mu.eta  <- link$mu.eta
 
   # MCMC Initialization
   n    <- length(y)
@@ -127,16 +104,33 @@ dpglmFit <- function(formula, data, X, y,        # Data
   min_y <- spt[1] - eps # A: make eps later?
   max_y <- spt[l] + eps # A: same here
 
-  # Verify MCMC step size
-  #if (!is.null(rho)) {
-    #rho <- as.numeric(rho)
-    #if (length(rho) == 1) rho <- rep(rho, p) # Scalar rho
-    #else if (length(rho) != p) stop("length(rho) must match the number of betas.")
-  #} else rho <- rep(1, p) # Defaults to no step size scaling
+  if (is.null(copula) || !is.list(copula)) copula <- list()
+  
+  if (flag == "dpglm") h <- h_ <- hstar <- 0
+  
+  else if (flag == "copula") {
+    if (is.null(copula$group_index)) stop("For copula DPGLM, must specify group indices via 'group_index'.")
+    group_index <- copula$group_index
+    if (length(copula$group_index) != n) stop("length(group_index) must equal n.")
+    
+    if (is.null(copula$rho)) stop("For copula DPGLM, must specify rho.")
+    rho <- copula$rho
+    if (!is.numeric(rho) || rho < 0 || rho > 1) stop("rho must be a scalar in (0, 1)")
+  }
+
+  if (!is.null(seed)) set.seed(seed)
+  
+  if (is.null(c0)) c0 <- c0_silverman(y) / 4
+  
+  # Extract link
+  linkfun <- link$linkfun
+  linkinv <- link$linkinv
+  mu.eta  <- link$mu.eta
 
   beta_samples <- matrix(NA, nrow = iter, ncol = p)
   theta_samples <- matrix(NA, nrow = iter, ncol = n)
   u_samples <- z_samples <- matrix(NA, nrow = iter, ncol = n)
+  if (flag == "copula") rho_samples <- numeric(iter)
   crm_samples   <- list()
   lnlik_samples <- numeric(iter)
 
@@ -179,7 +173,12 @@ dpglmFit <- function(formula, data, X, y,        # Data
     ySptIndex  = NULL,
     thetaStart = NULL
   )$theta
-  if (theta0 > 20) theta0 <- 20
+  if (any(theta0 > 20)) {
+    idx <- which(theta0 > 20)
+    theta0[idx] <- 20
+    warning("Capped some values of Theta at 20. Consider increasing M.")
+  }
+
   #Jtld_0 <- exp(theta0 * z.tld) * J.tld / sum(exp(theta0 * z.tld) * J.tld)
   temp <- exp(theta0 * z.tld - max(theta0 * z.tld))
   # Adding H, something like
@@ -272,12 +271,31 @@ dpglmFit <- function(formula, data, X, y,        # Data
             cr_logprop_beta <- dmvnorm(x = beta, mean = beta_mode_, sigma = beta_cov_, log = TRUE)
             
             # Compute log-posterior values
+            if (flag == "copula") h = copula_contribution_by_group(y, group_index, rho,
+                                       crm.atoms = z.tld, crm.jumps = J.tld, theta, c0,
+                                       min_y, max_y)
+            
             cr_logpost_beta <- logpost_beta(beta = beta, linkinv = linkinv, z = z, X = X, atoms = z.tld, 
-                                            jumps  = J.tld, mu_beta = mb, # Used to be mu_beta
-                                            sigma_beta = Sb) # Used to be sigma_beta
+                                            jumps  = J.tld, mu_beta = mb,
+                                            sigma_beta = Sb, h = h)
+            
+            if (flag == "copula") {
+              theta_ <- gldrm:::getTheta(spt = z.tld,
+                                       f0  = J.tld,
+                                       mu  = plogis(X %*% beta_),
+                                       sampprobs  = NULL,
+                                       ySptIndex  = NULL,
+                                       thetaStart = theta
+                                      )$theta
+            
+              h_ <- copula_contribution_by_group(y, group_index, rho,
+                                                 crm.atoms = z.tld, crm.jumps = J.tld, theta_, c0,
+                                                 min_y, max_y)
+            }
+            
             pr_logpost_beta <- logpost_beta(beta = beta_, linkinv = linkinv, z = z, X = X, atoms = z.tld, 
-                                            jumps  = J.tld, mu_beta = mb, # Used to be mu_beta
-                                            sigma_beta = Sb) # Used to be sigma_beta
+                                            jumps = J.tld, mu_beta = mb,
+                                            sigma_beta = Sb, h = h_)
             
             # Metropolis-Hastings acceptance step
             log_acc_prob <- pr_logpost_beta - cr_logpost_beta + cr_logprop_beta - pr_logprop_beta
@@ -304,14 +322,24 @@ dpglmFit <- function(formula, data, X, y,        # Data
     )$theta
     
     theta <- theta_tilde
-    if (theta > 20) theta <- 20
+    if (any(theta > 20)) {
+      idx <- which(theta > 20)
+      theta[idx] <- 20
+      warning("Capped some values of Theta at 20. Consider increasing M.")
+    }
     message("  theta updated successfully")
+
+    # h update ------------------------------------
+    if (flag == "copula") h <- copula_contribution_by_group(y, group_index, rho,
+                                                            crm.atoms = z.tld, crm.jumps = J.tld, theta, c0,
+                                                            min_y, max_y)
+    
     # u update ----------------------------------------
-    u <- sampler_u(u, zstar, nstar, theta, alpha, delta, min_y, max_y, eps)
+    u <- sampler_u(u, zstar, nstar, theta, alpha, delta, min_y, max_y, eps, h)
     message("  u updated successfully")
     
     # CRM update --------------------------------------
-    crm_star <- crm_sampler(M, u, zstar, nstar, theta, alpha, min_y, max_y, eps)
+    crm_star <- crm_sampler(M, u, zstar, nstar, theta, alpha, min_y, max_y, eps, h)
     z.tld_star <- c(crm_star$RL, crm_star$zstar)
     J.tld_star <- c(crm_star$RJ, crm_star$Jstar)
     
@@ -326,14 +354,22 @@ dpglmFit <- function(formula, data, X, y,        # Data
         thetaStart = theta
       )$theta
 
-      if (theta_tilde_star > 20) theta_tilde_star  <- 20
+      if (any(theta_tilde_star > 20)) {
+        idx <- which(theta_tilde_star > 20)
+        theta_tilde_star[idx] <- 20
+        warning("Capped some values of Theta at 20. Consider increasing M.")
+      }
+
+      if (flag == "copula") h_star <- copula_contribution_by_group(y, group_index, rho,
+                                            crm.atoms = z.tld_star, crm.jumps = J.tld_star, theta = theta_tilde_star, c0,
+                                            min_y, max_y)
       
       b1 <- b_theta(theta_tilde_star, z.tld_star, J.tld_star)
       b2 <- b_theta(theta_tilde, z.tld, J.tld)
       b3 <- b_theta(theta_tilde_star, z.tld, J.tld)
       b4 <- b_theta(theta_tilde, z.tld_star, J.tld_star)
       # log_r <- log(exp(sum(2*(theta_tilde_star - theta_tilde)*z - b1 + b2 - b3 + b4))) E old
-      log_r <- sum(2*(theta_tilde_star - theta_tilde)*z - b1 + b2 - b3 + b4)
+      log_r <- sum(2*(theta_tilde_star - theta_tilde)*z + hstar - h - b1 + b2 - b3 + b4)
       
       if(log(runif(1)) < log_r){
         count2 <- count2 + 1
@@ -364,7 +400,11 @@ dpglmFit <- function(formula, data, X, y,        # Data
       ySptIndex  = NULL,
       thetaStart = NULL
     )$theta
-    if (theta0 > 20) theta0 <- 20
+    if (any(theta0 > 20)) {
+      idx <- which(theta0 > 20)
+      theta0[idx] <- 20
+      warning("Capped some values of Theta at 20. Consider increasing M.")
+    }
     
     temp <- exp(theta0 * z.tld - max(theta0 * z.tld))
     Jtld_0 <- (temp * J.tld) / sum(temp * J.tld)

@@ -288,7 +288,7 @@ X <- dat[, -c(1,2)]
 datfram <- data.frame(X1=X$X1, X2=X$X2, y=y)
 
 model <- dirglm(y ~ X2, data=datfram, link="logit", type="dpglm",
-                dpglmControl=dpglm.control(burnin=100, thin=1, save=5000, seed=832, M=2000))
+                dpglmControl=dpglm.control(burnin=100, thin=1, save=5000, seed=832, M=50))
 colMeans(model$samples$beta) # Truth is c(1, 0)
 mean(sapply(model$samples$crm$z.tld, mean)) # Truth is 0.5
 mean(sapply(model$samples$crm$J.tld, mean)) # Truth is 0.001 (or 0?)
