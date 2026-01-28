@@ -33,15 +33,15 @@
 dpglm.control <- function(burnin=100, thin=10, save=1000,
                           mb=NULL, Sb=NULL,
                           M=20, alpha=1, delta=2, c0=NULL,
-                          gamma=1, mu0=NULL, spt=NULL, H=NULL, flag=c("dp", "cdp", "ods"), eps=1e-6,
+                          gamma=1, mu0=NULL, spt=NULL, H=NULL, flag=c("dpglm", "copula", "ods"), eps=1e-6,
+                          # If flag = copula, require group index (perhaps check in fit function?)
                           betaStart=NULL, varbetaStart=NULL, thetaStart=NULL, crmStart=NULL,
                           seed=NULL) #, add H, flag 
 {
   if (burnin < 0 || floor(burnin) != burnin) stop("Number of burn-in samples must be an integer >= 0")
   if (thin   < 1 || floor(thin)   != thin)   stop("Thin must be an integer >= 1")
   if (save   < 1 || floor(save)   != save)   stop("Number of saved iterations must be an integer >= 1")
-  #if (!(rho <= 1 & rho > 0))                 stop("rho must lie in (0, 1]")
-  #if (length(spt) != 2)                      stop("Support must be a vector of length 2")
+  flag <- match.arg(flag)
   ctrl <- list(burnin       = burnin,
                thin         = thin,
                save         = save,
@@ -99,9 +99,6 @@ dpglmFit <- function(formula, data, X, y,        # Data
     # Else, define H as some default
   #}
 
-  if (is.null(flag)) flag <- "dpglm"
-  flag <- match.arg(as.character(flag), choices = c("dpglm", "copula", "ods"))
-
   if (is.null(H) || flag == "dpglm") H <- function(...) 0
   else { # H is non-null and model is copula or ods
     if (class(H) != "function") stop("H must be a function.")
@@ -126,7 +123,7 @@ dpglmFit <- function(formula, data, X, y,        # Data
 
   # Extract support bounds
   if (is.unsorted(spt)) spt <- sort(spt)
-  r <- diff(range(spt))
+  # r <- diff(range(spt))
   min_y <- spt[1] - eps # A: make eps later?
   max_y <- spt[l] + eps # A: same here
 
