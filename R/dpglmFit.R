@@ -179,6 +179,7 @@ dpglmFit <- function(formula, data, X, y,        # Data
     ySptIndex  = NULL,
     thetaStart = NULL
   )$theta
+  if (theta0 > 20) theta0 <- 20
   #Jtld_0 <- exp(theta0 * z.tld) * J.tld / sum(exp(theta0 * z.tld) * J.tld)
   temp <- exp(theta0 * z.tld - max(theta0 * z.tld))
   # Adding H, something like
@@ -303,6 +304,7 @@ dpglmFit <- function(formula, data, X, y,        # Data
     )$theta
     
     theta <- theta_tilde
+    if (theta > 20) theta <- 20
     message("  theta updated successfully")
     # u update ----------------------------------------
     u <- sampler_u(u, zstar, nstar, theta, alpha, delta, min_y, max_y, eps)
@@ -323,6 +325,8 @@ dpglmFit <- function(formula, data, X, y,        # Data
         ySptIndex  = NULL,
         thetaStart = theta
       )$theta
+
+      if (theta_tilde_star > 20) theta_tilde_star  <- 20
       
       b1 <- b_theta(theta_tilde_star, z.tld_star, J.tld_star)
       b2 <- b_theta(theta_tilde, z.tld, J.tld)
@@ -360,6 +364,7 @@ dpglmFit <- function(formula, data, X, y,        # Data
       ySptIndex  = NULL,
       thetaStart = NULL
     )$theta
+    if (theta0 > 20) theta0 <- 20
     
     temp <- exp(theta0 * z.tld - max(theta0 * z.tld))
     Jtld_0 <- (temp * J.tld) / sum(temp * J.tld)
