@@ -32,11 +32,12 @@
 #' @export
 dpglm.control <- function(burnin=100, thin=10, save=1000,
                           mb=NULL, Sb=NULL,
+                          min_y=NULL, max_y=NULL,
                           M=50, alpha=1, delta=2, c0=NULL,
                           gamma=1, mu0=NULL, spt=NULL, flag=c("dpglm", "copula", "ods"), eps=1e-6,
                           copula=list(),
                           betaStart=NULL, varbetaStart=NULL, thetaStart=NULL, crmStart=NULL,
-                          seed=NULL) #, add H, flag 
+                          seed=NULL) # add min_y, max_y
 {
   if (burnin < 0 || floor(burnin) != burnin) stop("Number of burn-in samples must be an integer >= 0")
   if (thin   < 1 || floor(thin)   != thin)   stop("Thin must be an integer >= 1")
@@ -72,7 +73,7 @@ dpglm.control <- function(burnin=100, thin=10, save=1000,
 #' @keywords internal
 dpglmFit <- function(formula, data, X, y,        # Data
                      link,                       # Link
-                     mu0, spt, init,             # Specs
+                     mu0, init,             # Specs
                      dpglmControl, thetaControl) # Controls
 {
   # Extract dpglmControl parameters
@@ -86,10 +87,17 @@ dpglmFit <- function(formula, data, X, y,        # Data
   delta        <- dpglmControl$delta
   c0           <- dpglmControl$c0
   gamma        <- dpglmControl$gamma
+  spt          <- dpglmControl$spt
   flag         <- dpglmControl$flag
   eps          <- dpglmControl$eps
   copula       <- dpglmControl$copula
   seed         <- dpglmControl$seed
+
+  ebp <- 2L # 0 1 or 2
+
+
+  # Set theoretical support bounds
+  if (is.null(spt)) spt <- c(min(y) - eps, max(y) + eps)
 
   # MCMC Initialization
   n    <- length(y)
@@ -100,9 +108,8 @@ dpglmFit <- function(formula, data, X, y,        # Data
 
   # Extract support bounds
   if (is.unsorted(spt)) spt <- sort(spt)
-  # r <- diff(range(spt))
-  min_y <- spt[1] - eps # A: make eps later?
-  max_y <- spt[l] + eps # A: same here
+  min_y <- spt[1] - eps
+  max_y <- spt[l] + eps
 
   if (is.null(copula) || !is.list(copula)) copula <- list()
   
@@ -112,10 +119,6 @@ dpglmFit <- function(formula, data, X, y,        # Data
     if (is.null(copula$group_index)) stop("For copula DPGLM, must specify group indices as 'group_index'.")
     group_index <- copula$group_index
     if (length(copula$group_index) != n) stop("length(group_index) must equal n.")
-    
-    if (is.null(copula$rho)) stop("For copula DPGLM, must specify rho as `rho`.")
-    rho <- copula$rho
-    if (!is.numeric(rho) || rho < 0 || rho > 1) stop("rho must be a scalar in (0, 1)")
     
     if (is.null(copula$rho_proposal_sd)) stop("For copula DPGLM, must specify rho proposal sd as `rho_proposal_sd`")
     rho_proposal_sd <- copula$rho_proposal_sd
@@ -134,7 +137,10 @@ dpglmFit <- function(formula, data, X, y,        # Data
   beta_samples <- matrix(NA, nrow = iter, ncol = p)
   theta_samples <- matrix(NA, nrow = iter, ncol = n)
   u_samples <- z_samples <- matrix(NA, nrow = iter, ncol = n)
-  if (flag == "copula") rho_samples <- numeric(iter)
+  if (flag == "copula") {
+    rho_samples <- numeric(iter)
+    rho_samples[1] <- rho <- 0.5
+  }
   crm_samples   <- list()
   lnlik_samples <- numeric(iter)
 
@@ -146,6 +152,7 @@ dpglmFit <- function(formula, data, X, y,        # Data
   meanY_x <- linkinv(X %*% beta)
   z.tld <- z_tld <-  as.numeric(init$crm$z.tld)
   J.tld <- J_tld <- as.numeric(init$crm$J.tld)
+  cat("Initial sum(J.tld) =", sum(J.tld), "\n")
   crm_samples[[1]] <- list(z.tld = z.tld, J.tld = J.tld)
 
   ord <- order(J_tld)[1:M]
@@ -167,7 +174,6 @@ dpglmFit <- function(formula, data, X, y,        # Data
   Jstar <- rgamma(n = length(nstar), shape = nstar, rate = 1)
   
   count1 <- count2 <- 0
-  #scale_factors <- c(1.5, 2.5) %>% sqrt()
 
   theta0 <- gldrm:::getTheta(
     spt = z.tld,
@@ -177,20 +183,29 @@ dpglmFit <- function(formula, data, X, y,        # Data
     ySptIndex  = NULL,
     thetaStart = NULL
   )$theta
-  if (any(theta0 > 20)) {
-    idx <- which(theta0 > 20)
-    theta0[idx] <- 20
-    warning("Capped some values of Theta at 20. Consider increasing M.")
+
+  if (any(theta0 > 50)) {
+    idx <- which(theta0 > 50)
+    theta0[idx] <- 50
+    warning("Capped some values of Theta at 50. Consider increasing M.")
   }
 
-  #Jtld_0 <- exp(theta0 * z.tld) * J.tld / sum(exp(theta0 * z.tld) * J.tld)
+  # EBP STUFF
   temp <- exp(theta0 * z.tld - max(theta0 * z.tld))
-  # Adding H, something like
-  # tilt <- H(...)
-  # term <- theta0 * z.tld + tilt
-  #temp <- exp(term - max(term))
-  Jtld_0 <- (temp * J.tld) / sum(temp * J.tld)
-  lnlik_samples[1] <- lnlik <- loglik(linkinv = linkinv, z = z, X = X, beta = beta, atoms = z.tld, jumps = Jtld_0)
+  Jtilt <- temp * J.tld
+  W <- sum(Jtilt)
+  Jtld_0 <- Jtilt / W
+  if (ebp == 0L) {
+    J.tld_ll <- Jtld_0
+  } else if (ebp == 1L) {
+    J.tld <- Jtilt
+    J.tld_ll <- J.tld
+  } else if (ebp == 2L){
+    J.tld <- Jtld_0
+    J.tld_ll <- J.tld
+  } else stop("ebp not in {0, 1, 2}")
+
+  lnlik_samples[1] <- lnlik <- loglik(linkinv = linkinv, z = z, X = X, beta = beta, atoms = z.tld, jumps = J.tld_ll)
 
   # Beta prior
   if (is.null(mb)) {
@@ -212,24 +227,14 @@ dpglmFit <- function(formula, data, X, y,        # Data
     sdX     <- c(apply(as.matrix(X[, -1], nrow=n), 2, sd))
     Sbvec   <- (gMprime - gmprime)^2 * c(100, (gamma / (2 * sdX))^2) # Re-scaling on the linear-predictor scale
     #Sb      <- diag(Sbvec)
-    Sb <- Sbvec # Entries corresponding to the diagonal of beta prior cov
+    Sb <- sqrt(Sbvec) # Entries corresponding to sqrt(diagonal) of beta prior cov (i.e. standard devs)
   } else if (length(Sb) != p) stop("length(Sb) must match the number of betas.")
   else if (any(Sb <= 0)) stop("Sb must be positive definite.")
 
-  ### A: below few comments are really old (dirglm), probably entirely unnecessary
-  #else if (!all(dim(Sb)   == c(p, p))) stop("dim(Sb) must match the number of covariates.")
-  #else if   (!all(diag(Sb)) > 0)         stop("Sb must be positive definite.")
-  #else if (!all(Sb == diag(diag(Sb))))   Sbdiag <- FALSE
-
-  #if (!Sbdiag) {
-    #joint.update <- TRUE
-    #warning("Beta prior variance-covariance matrix is non-diagonal. Forcing joint update.")
-    #}
-  #if (!joint.update) Sb <- diag(Sb)
-
-
+  sd_theta <- rep(1, n) # Initial proposal standard deviation for theta_tilde
+  ub <- max(burnin, floor(iter) / 2)
   for(itr in 2:iter){
-    message(sprintf("Starting iter: %d", itr))
+    #message(sprintf("Starting iter: %d", itr))
     # Optimization to find the mode
     result <- tryCatch({
       optim(par = beta, fn = logpost_beta, linkinv = linkinv, z = z, X = X,
@@ -248,7 +253,10 @@ dpglmFit <- function(formula, data, X, y,        # Data
       # Safely compute Hessian inverse
       beta_cov_ <- tryCatch({
         -solve(result$hessian)
-      }, error = function(e) return(NULL))  # If inversion fails, return NULL
+      }, error = function(e) {
+        message(e)
+        return(NULL)
+      })  # If inversion fails, return NULL
       
       # Only proceed if covariance matrix is valid and positive definite
       if (!is.null(beta_cov_)) {
@@ -257,10 +265,10 @@ dpglmFit <- function(formula, data, X, y,        # Data
                 -sqrt(.Machine$double.eps))) {
           
           # Force positive defineness if needed
-          beta_cov_ <- Matrix::nearPD(beta_cov_)$mat %>% as.matrix()
+          beta_cov_ <- as.matrix(Matrix::nearPD(beta_cov_)$mat)
           
           # Sample new beta from proposal distribution
-          beta_ <- rmvnorm(n = 1, mean = beta_mode_, sigma = beta_cov_) %>% as.numeric()
+          beta_ <- as.numeric(rmvnorm(n = 1, mean = beta_mode_, sigma = beta_cov_))
           
           #mean_z_ <- exp(X %*% beta_) / (1 + exp(X %*% beta_))
           # mean_z_ <- plogis(X %*% beta_) # E old
@@ -308,13 +316,14 @@ dpglmFit <- function(formula, data, X, y,        # Data
               beta_cov <- beta_cov_
               meanY_x <- mean_z <- mean_z_
             }
-          }
-        } 
-      }
-    } else message("  `optim()` failed on this iteration")
+          } else message("min(z_) not within z.tld bounds")
+        } else message("beta covariance not positive semi-definite")
+      } else message("beta covariance is null")
+    } else message("either optim failed or det(hessian) is infinite")
     # If `optim()` fails, keep beta as it is and continue to next step.
+
     # theta update ------------------------------------
-    theta_tilde <- gldrm:::getTheta(
+    theta <- gldrm:::getTheta(
       spt = z.tld,
       f0  = J.tld,
       mu  = meanY_x,
@@ -323,31 +332,33 @@ dpglmFit <- function(formula, data, X, y,        # Data
       thetaStart = theta
     )$theta
     
-    theta <- theta_tilde
-    if (any(theta > 20)) {
-      idx <- which(theta > 20)
-      theta[idx] <- 20
-      warning("Capped some values of Theta at 20. Consider increasing M.")
+    if (any(theta > 50)) {
+      idx <- which(theta > 50)
+      theta[idx] <- 50
+      warning("Capped some values of Theta at 50. Consider increasing M.")
     }
-    message("  theta updated successfully")
+    #message("  theta updated successfully")
 
     # h update ------------------------------------
     if (flag == "copula") h <- log_copula_contribution_by_obs(y, group_index, rho,
                                                               crm.atoms = z.tld, crm.jumps = J.tld, theta, c0,
                                                               min_y, max_y)
-    
     # u update ----------------------------------------
     u <- sampler_u(u, zstar, nstar, theta, alpha, delta, min_y, max_y, eps, h)
-    message("  u updated successfully")
-    
+    #message("  u updated successfully")
+  
     # CRM update --------------------------------------
-    crm_star <- crm_sampler(M, u, zstar, nstar, theta, alpha, min_y, max_y, eps, h)
+    if(itr == ub + 1) {
+      sd_theta <- apply(theta_samples[2:ub, ], 2, sd) # sd could be replaced by sd(diff)
+    }
+    crm_star <- crm_sampler(M, u, zstar, nstar, theta, sd_theta, alpha, min_y, max_y, eps, h, itr)
     z.tld_star <- c(crm_star$RL, crm_star$zstar)
     J.tld_star <- c(crm_star$RJ, crm_star$Jstar)
+    theta_tilde <- crm_star$theta_tilde
     
     if(min(meanY_x) >= min(z.tld_star) && max(meanY_x) <= max(z.tld_star)){
       # MH step
-      theta_tilde_star <- gldrm:::getTheta(
+      theta_star <- gldrm:::getTheta( # rename to theta_star
         spt = z.tld_star,
         f0  = J.tld_star,
         mu  = meanY_x,
@@ -356,22 +367,24 @@ dpglmFit <- function(formula, data, X, y,        # Data
         thetaStart = theta
       )$theta
 
-      if (any(theta_tilde_star > 20)) {
-        idx <- which(theta_tilde_star > 20)
-        theta_tilde_star[idx] <- 20
-        warning("Capped some values of Theta at 20. Consider increasing M.")
+      if (any(theta_star > 50)) {
+        idx <- which(theta_star > 50)
+        theta_star[idx] <- 50
+        warning("Capped some values of Theta at 50. Consider increasing M.")
       }
 
-      if (flag == "copula") h_star <- log_copula_contribution_by_obs(y, group_index, rho,
-                                                                    crm.atoms = z.tld_star, crm.jumps = J.tld_star, theta = theta_tilde_star, c0,
+      if (flag == "copula") hstar <- log_copula_contribution_by_obs(y, group_index, rho,
+                                                                    crm.atoms = z.tld_star, crm.jumps = J.tld_star, theta = theta_star, c0,
                                                                     min_y, max_y)
       
-      b1 <- b_theta(theta_tilde_star, z.tld_star, J.tld_star)
-      b2 <- b_theta(theta_tilde, z.tld, J.tld)
-      b3 <- b_theta(theta_tilde_star, z.tld, J.tld)
+      b1 <- b_theta(theta_star, z.tld_star, J.tld_star)
+      b2 <- b_theta(theta, z.tld, J.tld)
+      b3 <- b_theta(theta_tilde, z.tld, J.tld)
       b4 <- b_theta(theta_tilde, z.tld_star, J.tld_star)
-      # log_r <- log(exp(sum(2*(theta_tilde_star - theta_tilde)*z - b1 + b2 - b3 + b4))) E old
-      log_r <- sum(2*(theta_tilde_star - theta_tilde)*z + hstar - h - b1 + b2 - b3 + b4)
+      # log_r <- sum(2*(theta_star - theta)*z + hstar - h - b1 + b2 - b3 + b4)
+      log_r <- sum((theta_star - theta)*z - b1 + b2 - b3 + b4) +
+        sum(dnorm(theta_tilde, mean = theta_star, sd = sd_theta, log = TRUE) - 
+        dnorm(theta_tilde, mean = theta, sd = sd_theta, log = TRUE))
       
       if(log(runif(1)) < log_r){
         count2 <- count2 + 1
@@ -381,19 +394,19 @@ dpglmFit <- function(formula, data, X, y,        # Data
         Jstar <- crm_star$Jstar
         z.tld <- c(RL, zstar)
         J.tld <- c(RJ, Jstar)
-        theta <- theta_tilde_star
+        theta <- theta_star
       }
     }
     
-    message("  crm updated successfully")
+    #message("  crm updated successfully")
     # z update ------------------------------------------------------------------
     z <- z_sampler_unifK(y, c0, z.tld, J.tld, theta, min_y, max_y, eps)
-    message("  z updated successfully")
+    #message("  z updated successfully")
     # zstar and nstar update ----------------------------------------------------
     resampled_z <- resample_zstar(z)
     zstar <- resampled_z$zstar
     nstar <- resampled_z$nstar
-    
+
     theta0 <- gldrm:::getTheta(
       spt = z.tld,
       f0  = J.tld,
@@ -402,10 +415,11 @@ dpglmFit <- function(formula, data, X, y,        # Data
       ySptIndex  = NULL,
       thetaStart = NULL
     )$theta
-    if (any(theta0 > 20)) {
-      idx <- which(theta0 > 20)
-      theta0[idx] <- 20
-      warning("Capped some values of Theta at 20. Consider increasing M.")
+
+    if (any(theta0 > 50)) {
+      idx <- which(theta0 > 50)
+      theta0[idx] <- 50
+      warning("Capped some values of Theta at 50. Consider increasing M.")
     }
 
     # (copula) rho update ----------------------------------------------------------------
@@ -428,16 +442,41 @@ dpglmFit <- function(formula, data, X, y,        # Data
     }
     
     temp <- exp(theta0 * z.tld - max(theta0 * z.tld))
-    Jtld_0 <- (temp * J.tld) / sum(temp * J.tld)
-    lnlik <- loglik(linkinv = linkinv, z = z, X = X, beta = beta, atoms = z.tld, jumps = Jtld_0)
-    message("  loglik calculated successfully")
+    Jtilt <- temp * J.tld
+    W <- sum(Jtilt)
+    Jtld_0 <- Jtilt / W
+    if (ebp == 0L) {
+      J.tld_ll <- Jtld_0
+    } else if (ebp == 1L) {
+      J.tld <- Jtilt
+      J.tld_ll <- J.tld
+    } else if (ebp == 2L){
+      J.tld <- Jtld_0
+      J.tld_ll <- J.tld
+    } else stop("ebp not in {0, 1, 2}")
+    #message("  loglik calculated successfully")
+    if (itr %% 250 == 0) {
+      Jsum <- sum(J.tld)
+      Jnorm <- J.tld / Jsum
+      cat(
+        "itr", itr,
+        "| ebp=", ebp,
+        "| sumJ=", format(Jsum, scientific=TRUE),
+        "| Jmax_share=", round(max(Jnorm), 3),
+        "| ess(J)=", round(1/sum(Jnorm^2), 3),
+        "| W=", format(W, scientific=TRUE),
+        "| mean(Jtld_0)=", round(sum(z.tld * Jtld_0), 6),
+        "| mu0=", round(mu0, 6),
+        "\n\n"
+      )
+    }
+    lnlik <- loglik(linkinv = linkinv, z = z, X = X, beta = beta, atoms = z.tld, jumps = J.tld_ll)
     
     # Storing MCMC simulations --------------------------------------------------
     z_samples[itr, ] <- z
     u_samples[itr, ] <- u
     beta_samples[itr,] <- beta
     theta_samples[itr, ] <- theta
-    message("max(theta) = ", max(theta))
     crm_samples[[itr]] <- list(z.tld = z.tld, J.tld = J.tld)
     if (flag == "copula") rho_samples[itr] <- rho
     lnlik_samples[itr] <- lnlik
@@ -445,8 +484,10 @@ dpglmFit <- function(formula, data, X, y,        # Data
   
   crm_samples <- data.frame(
   z.tld = I(lapply(crm_samples, `[[`, "z.tld")),
-  J.tld = I(lapply(crm_samples, `[[`, "J.tld")))
-  samples <- list(z = z_samples, beta = beta_samples, crm = crm_samples)
+  J.tld = I(lapply(crm_samples, `[[`, "J.tld"))
+  )
+  samples <- list(z = z_samples, beta = beta_samples,
+                  crm = crm_samples, theta = theta_samples)
   
   # A: Add priors to this later?
   # Control params?

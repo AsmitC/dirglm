@@ -326,11 +326,11 @@ beta_update_separate <- function(X,
       cr_llik <- sum(cr_tht * y - cr_btht)
       pr_pbt <- dnorm(pr_bt[j],
                       mean = mb[j],
-                      sigma = sqrt(Sb[j]),
+                      sd = sqrt(Sb[j]),
                       log = T)
       cr_pbt <- dnorm(cr_bt[j],
                       mean = mb[j],
-                      sigma = sqrt(Sb[j]),
+                      sd = sqrt(Sb[j]),
                       log = T)
       cr_qbt <- dnorm(cr_bt[j],
                       mean = pr_bt[j],
@@ -373,26 +373,18 @@ beta_update_separate <- function(X,
 #                               Update z                                      #
 # -----------------------------------------------------------------------------#
 
-z_sampler_unifK <- function(y, c0, crm.atoms, crm.jumps, tht, min_y, max_y, eps) { # add arg H
+z_sampler_unifK <- function(y, c0, crm.atoms, crm.jumps, tht, min_y, max_y, eps) {
   n <- length(y)
-  #eps <- 1e-6
   lower <- crm.atoms - c0
   upper <- crm.atoms + c0
-  # lower[lower < 0] <- 0
-  # upper[upper > 1] <- 1
   lower[lower < min_y] <- min_y + eps  
   upper[upper > max_y] <- max_y - eps
   width <- upper - lower
   z <- numeric(n)
   for (i in 1:n) {
     indices <- y[i] >= lower & y[i] <= upper
-    #message(sprintf("min(y) = %.3f and max(y) = %.3f", min(y), max(y)))
-    #message(sprintf("i = %d and y[i] = %.3f", i, y[i]))
-    #message("    z_sampler_unifK any indices:", any(indices))
     indx <- which(indices)
-    log_prob <- (1 / width[indx]) + (tht[i] * crm.atoms[indx]) + log(crm.jumps[indx]) # E wrote
-    # Adding H, something like
-    #log_prob <- (1 / width[indx]) + (tht[i] * crm.atoms[indx] + H(...)) + log(crm.jumps[indx])
+    log_prob <- -log(width[indx]) + (tht[i] * crm.atoms[indx]) + log(crm.jumps[indx])
     prob <- exp(log_prob - max(log_prob))
     if(sum(indices) == 1){
       z[i] <- crm.atoms[indices]
@@ -580,15 +572,15 @@ sampler_u <- function(u, zstar, nstar, theta, alpha, delta, min_y, max_y, eps, h
 #' @export
 
 b_theta <- function(theta, spt, f0) { # Add arg H, type?
-  log_f0 <- log(f0) # log density values
+  log_f0_dz <- log(f0) #+ log(diff(spt)[1]) # log density values
   
   # Create the log weights matrix of dimensions length(theta) x length(spt)
   # (i, j)th element is theta[i]*spt[j] + log(f0[j])
   log_weights <- outer(theta, spt, "*") +
-    matrix(log_f0, nrow = length(theta), ncol = length(spt), byrow = TRUE)
+    matrix(log_f0_dz, nrow = length(theta), ncol = length(spt), byrow = TRUE)
 
   # Adding H, something like
-  #log_weights <- outer(theta, spt, "*")  + H(...), maybe make a flag? some log weights need some dont maybe?
+  #log_weights <- outer(theta, spt, "*")  + H(...),
     #matrix(log_f0, nrow = length(theta), ncol = length(spt), byrow = TRUE)
   
   # Use log-sum-exp trick to compute b(theta) for each theta
@@ -604,10 +596,12 @@ b_theta <- function(theta, spt, f0) { # Add arg H, type?
 #                               CRM update                                   #
 # --------------------------------------------------------------------------- #
 
-crm_sampler <- function(M, u, zstar, nstar, tht, alpha, min_y, max_y, eps, h){
+crm_sampler <- function(M, u, zstar, nstar, tht_, sd_, alpha, min_y, max_y, eps, h, itr){
   N <- 3001
   R <- 3001
   s <- -log(seq(exp(-eps), exp(-5e-4), length.out = N))
+
+  tht <- rnorm(length(tht_), mean = tht_, sd = sd_)
   
   # Sorted, ascending order, needed in RL
   #z <- seq(eps, 1 - eps, length.out = R)
@@ -617,7 +611,7 @@ crm_sampler <- function(M, u, zstar, nstar, tht, alpha, min_y, max_y, eps, h){
   # Here we compute psi_z for each grid point z[j] by summing over u.
   
   # Compute a matrix of log-terms:
-  log_terms <- outer(log(u), z, function(lu, z_val) lu + tht * z_val)
+  log_terms <- outer(log(u), z, function(lu, z_val) lu + tht * z_val) # think this should be ... z_val + h, S checking
 
   # Adding H, something like
   #log_terms <- outer(log(u), z, function(lu, zval, H, ...) lu + tht * z_val + H(...))
@@ -628,6 +622,9 @@ crm_sampler <- function(M, u, zstar, nstar, tht, alpha, min_y, max_y, eps, h){
     exp(max_val + log(sum(exp(log_vec - max_val))))
   })
   
+  if (itr %% 250 == 0) {
+  cat("  psi_z range:", paste(round(range(psi_z), 3), collapse=","), "\n")
+  }
   
   # Assume:
   #   psi_z: vector of length R computed as before over the z grid
@@ -711,27 +708,22 @@ crm_sampler <- function(M, u, zstar, nstar, tht, alpha, min_y, max_y, eps, h){
   # log_terms <- outer(log(u), zstar, function(lu, z, H, ...) lu + tht * z + H(...))
   
   # For each column (corresponding to a fixed zstar), use the log-sum-exp trick
+  # psi_star still gets big, maybe non-avoidable?
   psi_star <- sapply(seq_along(zstar), function(j) {
     max_val <- max(log_terms[, j])
     exp(max_val + log(sum(exp(log_terms[, j] - max_val))))
   })
   
-  # Plausibility check: check alpha and beta, check if mean is alpha/beta or alpha*beta
-  # and check if mean is too big or too close to 0
-  # Update: Looks like mean is too big
-  # Looks like the issue is not nstar, but psi_star being huge since sum(nstar) = 25
-  # Even more deep search finds that theta is actually whats huge, making log terms huge
-  #message("Jstar check:", "sum(nstar) =", sum(nstar), "rate (psistar) =", psi_star)
- #  message("max(theta):", max(tht))
   Jstar <- rgamma(length(zstar), shape = nstar, rate = psi_star + 1)
   
   return(list(
     RL = RL,
     RJ = RJ,
     zstar = zstar,
-    Jstar = Jstar
+    Jstar = Jstar,
+    theta_tilde = tht
   ))
-}
+  }
 
 # ------------------------------------------------------------------
 # Compute observation-specific marginal CDFs F_{x_j}(y_j) using a

@@ -227,10 +227,6 @@ dirglm <- function(formula, data=NULL, link="log", type=c("dpglm", "dirglm"),
 
     init <- list(beta=betaStart, varbeta=varbetaStart,
                  theta=thetaStart, crm=crmStart)
-    
-    spt <- dpglmControl$spt
-    eps <- .Machine$double.eps
-    if (is.null(spt)) spt <- c(min(y) - eps, max(y) + eps)
 
     # Fit
     fit <- dpglmFit(formula      = formula,
@@ -238,7 +234,6 @@ dirglm <- function(formula, data=NULL, link="log", type=c("dpglm", "dirglm"),
                     y            = y,
                     link         = link,
                     mu0          = mu0,
-                    spt          = spt,
                     init         = init,
                     dpglmControl = dpglmControl,
                     thetaControl = thetaControl)
