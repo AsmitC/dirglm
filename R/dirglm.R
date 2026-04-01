@@ -185,8 +185,8 @@ dirglm <- function(formula, data = NULL, link = "log",
     burnin           = dirglmControl$burnin,
     thin             = dirglmControl$thin,
     save             = dirglmControl$save,
-    beta_acceptance  = fit$p_acc_beta,
-    f0_acceptance    = fit$p_acc_f0
+    beta_acceptance  = fit$beta_acceptance,
+    f0_acceptance    = fit$f0_acceptance
   )
 
   class(out) <- "dirglm"

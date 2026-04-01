@@ -241,7 +241,7 @@ dirglmFit <- function(formula, data, X, y,                # Data
        dir_pr_parm       = dir_pr_parm,
        spt               = spt,
        mu0               = mu0,
-       p_acc_beta        = p_acc_beta,
-       p_acc_f0          = p_acc_f0,
+       beta_acceptance   = p_acc_beta,
+       f0_acceptance     = p_acc_f0,
        iter              = iter)
 }

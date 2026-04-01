@@ -226,7 +226,11 @@ dpglmFit <- function(formula, data, X, y,        # Data
   } else if (length(Sb) != p) stop("length(Sb) must match the number of betas.")
   else if (any(Sb <= 0)) stop("Sb must be positive definite.")
 
-  sd_theta <- rep(1, n) # Initial proposal standard deviation for theta_tilde
+  sd_theta <- rep(1, n)   # proposal sd for theta tilde before calibration
+  ub <- max(burnin, floor(iter / 2))
+  dsum  <- rep(0, n) # cumulative sum of theta_star - theta
+  dsqsum <- rep(0, n) # cumulative sum of (theta_star - theta)^2
+  dn    <- 0L
   ub <- max(burnin, floor(iter) / 2)
   for(itr in 2:iter){
     if(itr%%250==0) cat("Starting iteration:", itr)
@@ -339,9 +343,13 @@ dpglmFit <- function(formula, data, X, y,        # Data
     u <- sampler_u(u, zstar, nstar, theta, alpha, delta, min_y, max_y, eps, h)
   
     # CRM update --------------------------------------
-    if(itr == ub + 1) {
-      sd_theta <- apply(theta_samples[2:ub, ], 2, sd) # sd could be replaced by sd(diff)
+    if (itr == ub + 1) {
+      dmean  <- dsum / dn
+      dsqmean <- dsqsum / dn
+      dvar <- pmax(dsqmean - dmean^2, eps)
+      sd_theta <- sqrt(dvar)
     }
+
     crm_star <- crm_sampler(M, u, zstar, nstar, theta, sd_theta, alpha, min_y, max_y, eps, h, itr)
     z.tld_star <- c(crm_star$RL, crm_star$zstar)
     J.tld_star <- c(crm_star$RJ, crm_star$Jstar)
@@ -357,6 +365,14 @@ dpglmFit <- function(formula, data, X, y,        # Data
         ySptIndex  = NULL,
         thetaStart = theta
       )$theta
+
+      # Collect proposal jump moments in initial iterations
+      if (itr <= ub) {
+        di <- theta_star - theta
+        dsum  <- dsum  + di
+        dsqsum <- dsqsum + di^2
+        dn    <- dn + 1L
+      }
 
       if (any(theta_star > 50)) {
         idx <- which(theta_star > 50)

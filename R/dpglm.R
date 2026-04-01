@@ -165,8 +165,8 @@ dpglm <- function(formula, data = NULL, link = "log",
     burnin           = dpglmControl$burnin,
     thin             = dpglmControl$thin,
     save             = dpglmControl$save,
-    beta_acceptance  = fit$p_acc_beta,
-    crm_acceptance   = fit$p_acc_crm
+    beta_acceptance  = fit$beta_acceptance,
+    crm_acceptance   = fit$crm_acceptance
   )
 
   class(out) <- "dpglm"
