@@ -1,78 +1,88 @@
 #' Control arguments for the \code{dpglm} algorithm.
 #'
 #' This function returns control arguments for the \code{dpglm} algorithm.
-#' Each argument has a default value, which will be used unless a different
-#' value is provided by the user.
 #'
 #' @param burnin Number of burn-in MCMC iterations. Defaults to 100.
 #' @param thin Factor by which to thin MCMC iterations. Defaults to 10.
 #' @param save Number of MCMC samples to return. Defaults to 1000.
-#' @param mb Prior mean for beta. Defaults to a p-length vector whose entries are all 0.
-#' @param Sb Vector containing the diagonal entries in the prior variance-covariance matrix for beta.
-#' @param min_y Smallest value in theoretical support.
-#' @param max_y Largest value in theoretical support.
-#' @param M Number of atoms to sample for CRM.
-#' @param alpha Tuning parameter.
-#' @param delta Tuning parameter.
-#' @param c0 Tuning parameter.
-#' @param robust Provides numerical stability. Defaults to \code{TRUE}. See details for more.
-#' @param gamma Shrinkage parameter for the (default) prior variance on \code{beta}.
-#' Defaults to 1. Will not be used if \code{Sb} is specified in \code{dirglm}.
-#' @param mu0 Mean of the reference distribution. The reference distribution is
-#' not unique unless its mean is restricted to a specific value. This value can
-#' be any number within the range of observed values, but values near the boundary
-#' may cause numerical instability. This is an optional argument with \code{mean(y)}
-#' being the default value.
-#' @param eps Padding for the theoretical support. Defaults to 1e-6.
-#' @param betaStart Initial value for the regression coefficients \code{beta}.
-#' Defaults to the output obtained by fitting \code{gldrm}.
-#' @param varbetaStart Covariance matrix for \code{betaStart}. 
-#' @param thetaStart Initial value for the canonical parameter \code{theta}.
-#' @param crmStart Initial value for the reference distribution.
-#' Defaults to the output obtained by fitting \code{gldrm}.
+#' @param mb Prior mean for beta. Defaults to NULL.
+#' @param Sb Prior scale / diagonal variance entries for beta. Defaults to NULL.
+#' @param M Number of random CRM atoms proposed at each CRM update. Defaults to 50.
+#' @param alpha CRM mass parameter. Defaults to 1.
+#' @param delta Tuning parameter for the \code{u} update. Defaults to 2.
+#' @param c0 Bandwidth parameter used in the latent \code{z} update. Defaults to NULL.
+#' @param gamma Shrinkage parameter for the default prior variance on \code{beta}.
+#' Defaults to 1. Ignored if \code{Sb} is specified.
+#' @param mu0 Mean of the reference distribution. Defaults to \code{NULL}, in which case
+#' \code{mean(y)} is used internally.
+#' @param spt Theoretical support for the response in the DP-GLM. This should be a
+#' length-2 vector giving the lower and upper bounds. Defaults to \code{NULL}, in which
+#' case the support is inferred internally from the data as \code{c(min(y)-eps, max(y)+eps)}.
+#' @param eps Padding used when constructing default support bounds. Defaults to 1e-6.
+#' @param betaStart Initial value for \code{beta}. Defaults to NULL.
+#' @param varbetaStart Initial value for the proposal covariance of \code{beta}. Defaults to NULL.
+#' @param thetaStart Initial value for \code{theta}. Defaults to NULL.
+#' @param crmStart Initial value for the CRM state, given as a list with components
+#' \code{z.tld} and \code{J.tld}. Defaults to NULL.
 #' @param seed Random seed. Defaults to NULL.
+#' @param robust Provides numerical stability. Defaults to \code{TRUE}. See details for more. 
 #'
-#' @return Object of S3 class "dpglmControl"
+#' @return Object of S3 class "dpglmControl".
 #' 
 #' @details Setting \code{robust = TRUE} will tilt the CRM weights at each MCMC iteration
-#' to have the desired mean \text{mu0}. If \code{robust = FALSE}, these weights can be large
-#' and cause downstream numerical instability.
+#' to have the desired mean \text{mu0}. If \code{robust = FALSE}, these weights can
+#' vary more in magnitude and lead to downstream numerical instability.
 #'
 #' @export
-dpglm.control <- function(burnin=100, thin=10, save=1000,
-                          mb=NULL, Sb=NULL,
-                          min_y=NULL, max_y=NULL,
-                          M=20, alpha=1, delta=2, c0=NULL, robust=TRUE,
-                          gamma=1, mu0=NULL, spt=NULL, flag=c("dpglm", "copula", "ods"), eps=1e-6,
-                          copula=list(), ods=list(), 
-                          betaStart=NULL, varbetaStart=NULL, thetaStart=NULL, crmStart=NULL,
-                          seed=NULL)
+dpglm.control <- function(burnin = 100, thin = 10, save = 1000,
+                          mb = NULL, Sb = NULL,
+                          M = 50, alpha = 1, delta = 2, c0 = NULL,
+                          gamma = 1, mu0 = NULL, spt = NULL, eps = 1e-6,
+                          betaStart = NULL, varbetaStart = NULL,
+                          thetaStart = NULL, crmStart = NULL,
+                          seed = NULL, robust=TRUE)
 {
-  if (burnin < 0 || floor(burnin) != burnin) stop("Number of burn-in samples must be an integer >= 0")
-  if (thin   < 1 || floor(thin)   != thin)   stop("Thin must be an integer >= 1")
-  if (save   < 1 || floor(save)   != save)   stop("Number of saved iterations must be an integer >= 1")
-  flag <- match.arg(flag)
-  ctrl <- list(burnin       = burnin,
-               thin         = thin,
-               save         = save,
-               mb           = mb,
-               Sb           = Sb,
-               M            = M,
-               alpha        = alpha,
-               delta        = delta,
-               c0           = c0,
-               robust       = robust,
-               gamma        = gamma,
-               mu0          = mu0,
-               spt          = spt,
-               flag         = flag,
-               eps          = eps,
-               copula       = copula,
-               betaStart    = betaStart,
-               varbetaStart = varbetaStart,
-               thetaStart   = thetaStart,
-               crmStart     = crmStart,
-               seed         = seed)
+  if (burnin < 0 || floor(burnin) != burnin) {
+    stop("Number of burn-in samples must be an integer >= 0")
+  }
+  if (thin < 1 || floor(thin) != thin) {
+    stop("Thin must be an integer >= 1")
+  }
+  if (save < 1 || floor(save) != save) {
+    stop("Number of saved iterations must be an integer >= 1")
+  }
+
+  if (!is.null(spt)) {
+    if (!is.numeric(spt) || length(spt) != 2) {
+      stop("For dpglm, spt must be a numeric vector of length 2 giving the support bounds.")
+    }
+    if (spt[1] >= spt[2]) {
+      stop("For dpglm, spt must satisfy spt[1] < spt[2].")
+    }
+  }
+
+  ctrl <- list(
+    burnin       = burnin,
+    thin         = thin,
+    save         = save,
+    mb           = mb,
+    Sb           = Sb,
+    M            = M,
+    alpha        = alpha,
+    delta        = delta,
+    c0           = c0,
+    gamma        = gamma,
+    mu0          = mu0,
+    spt          = spt,
+    eps          = eps,
+    betaStart    = betaStart,
+    varbetaStart = varbetaStart,
+    thetaStart   = thetaStart,
+    crmStart     = crmStart,
+    seed         = seed,
+    robust       = robust
+  )
+
   class(ctrl) <- "dpglmControl"
   ctrl
 }
@@ -83,7 +93,7 @@ dpglm.control <- function(burnin=100, thin=10, save=1000,
 #' @keywords internal
 dpglmFit <- function(formula, data, X, y,        # Data
                      link,                       # Link
-                     mu0, init,                  # Specs
+                     spt, mu0, init, flag,       # Model Specs
                      dpglmControl, thetaControl) # Controls
 {
   # Extract dpglmControl parameters
@@ -98,40 +108,25 @@ dpglmFit <- function(formula, data, X, y,        # Data
   c0           <- dpglmControl$c0
   robust       <- dpglmControl$robust
   gamma        <- dpglmControl$gamma
-  spt          <- dpglmControl$spt
-  flag         <- dpglmControl$flag
   eps          <- dpglmControl$eps
   copula       <- dpglmControl$copula
   seed         <- dpglmControl$seed
+  robust       <- dpglmControl$robust
 
   # Set theoretical support bounds
-  if (is.null(spt)) spt <- c(min(y) - eps, max(y) + eps)
+  if (is.unsorted(spt)) spt <- sort(spt)
+  min_y <- spt[1]
+  max_y <- spt[2]
 
   # MCMC Initialization
   n    <- length(y)
   X    <- as.matrix(X, nrow=n)
   p    <- dim(X)[2]
-  l    <- length(spt)
   iter <- burnin + thin * save
-
-  # Extract support bounds
-  if (is.unsorted(spt)) spt <- sort(spt)
-  min_y <- spt[1] - eps
-  max_y <- spt[l] + eps
 
   if (is.null(copula) || !is.list(copula)) copula <- list()
   
   if (flag == "dpglm") h <- h_ <- hstar <- 0
-  
-  else if (flag == "copula") {
-    if (is.null(copula$group_index)) stop("For copula DPGLM, must specify group indices as 'group_index'.")
-    group_index <- copula$group_index
-    if (length(copula$group_index) != n) stop("length(group_index) must equal n.")
-    
-    if (is.null(copula$rho_proposal_sd)) stop("For copula DPGLM, must specify rho proposal sd as `rho_proposal_sd`")
-    rho_proposal_sd <- copula$rho_proposal_sd
-    if (!is.numeric(rho_proposal_sd) || rho_proposal_sd < 0) stop("rho_proposal_sd must be a nonnegative real number")
-  }
 
   if (!is.null(seed)) set.seed(seed)
   
@@ -211,7 +206,7 @@ dpglmFit <- function(formula, data, X, y,        # Data
   # Beta prior
   if (is.null(mb)) {
     mprime  <- spt[1] + (spt[2] - spt[1]) * 0.25
-    Mprime  <- spt[l - 1] + (spt[l] - spt[l - 1]) * 0.75
+    Mprime  <- spt[1] + (spt[2] - spt[1]) * 0.75
     gmprime <- linkfun(mprime)
     gMprime <- linkfun(Mprime)
     mid_spt <- (gmprime + gMprime) / 2
@@ -222,7 +217,7 @@ dpglmFit <- function(formula, data, X, y,        # Data
   Sbdiag <- TRUE
   if (is.null(Sb)) {
     mprime  <- spt[1] + (spt[2] - spt[1]) * 0.25
-    Mprime  <- spt[l - 1] + (spt[l] - spt[l - 1]) * 0.75
+    Mprime  <- spt[1] + (spt[2] - spt[1]) * 0.75
     gmprime <- linkfun(mprime)
     gMprime <- linkfun(Mprime)
     sdX     <- c(apply(as.matrix(X[, -1], nrow=n), 2, sd))
@@ -234,7 +229,7 @@ dpglmFit <- function(formula, data, X, y,        # Data
   sd_theta <- rep(1, n) # Initial proposal standard deviation for theta_tilde
   ub <- max(burnin, floor(iter) / 2)
   for(itr in 2:iter){
-    if(itr%%250==0) cat("Starting iteration: %s", itr)
+    if(itr%%250==0) cat("Starting iteration:", itr)
     # Optimization to find the mode
     result <- tryCatch({
       optim(par = beta, fn = logpost_beta, linkinv = linkinv, z = z, X = X,
