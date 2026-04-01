@@ -186,8 +186,8 @@ dirglm <- function(formula, data=NULL, link="log", type=c("dpglm", "dirglm"),
       burnin      = dirglmControl$burnin,
       thin        = dirglmControl$thin,
       save        = dirglmControl$save,
-      p_acc_beta  = fit$p_acc_beta,
-      p_acc_f0    = fit$p_acc_f0
+      beta_acceptance  = fit$p_acc_beta,
+      f0_acceptance    = fit$p_acc_f0
     )
     class(out) <- "dirglm"
   } # Closes line 148
@@ -252,8 +252,8 @@ dirglm <- function(formula, data=NULL, link="log", type=c("dpglm", "dirglm"),
       burnin      = dpglmControl$burnin,
       thin        = dpglmControl$thin,
       save        = dpglmControl$save,
-      p_acc_beta  = fit$p_acc_beta,
-      p_acc_f0    = fit$p_acc_crm
+      beta_acceptance  = fit$beta_acceptance,
+      crm_acceptance    = fit$crm_acceptance
     )
 
     class(out) <- "dpglm"

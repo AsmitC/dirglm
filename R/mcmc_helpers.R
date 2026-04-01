@@ -611,7 +611,7 @@ crm_sampler <- function(M, u, zstar, nstar, tht_, sd_, alpha, min_y, max_y, eps,
   # Here we compute psi_z for each grid point z[j] by summing over u.
   
   # Compute a matrix of log-terms:
-  log_terms <- outer(log(u), z, function(lu, z_val) lu + tht * z_val) # think this should be ... z_val + h, S checking
+  log_terms <- outer(log(u), z, function(lu, z_val) lu + tht * z_val)
 
   # Adding H, something like
   #log_terms <- outer(log(u), z, function(lu, zval, H, ...) lu + tht * z_val + H(...))
@@ -622,9 +622,9 @@ crm_sampler <- function(M, u, zstar, nstar, tht_, sd_, alpha, min_y, max_y, eps,
     exp(max_val + log(sum(exp(log_vec - max_val))))
   })
   
-  if (itr %% 250 == 0) {
-  cat("  psi_z range:", paste(round(range(psi_z), 3), collapse=","), "\n")
-  }
+  # if (itr %% 250 == 0) {
+  # cat("  psi_z range:", paste(round(range(psi_z), 3), collapse=","), "\n")
+  # }
   
   # Assume:
   #   psi_z: vector of length R computed as before over the z grid
@@ -933,3 +933,10 @@ log_post_rho <- function(rho, logc_obs) {
   ## Log posterior kernel
   loglik + logprior
 }
+
+calc_exceed <- function(z_atoms, J_jumps, thr_vec) {
+    Jsum <- sum(J_jumps)
+    if (!is.finite(Jsum) || Jsum <= 0) return(rep(NA_real_, length(thr_vec)))
+    w <- J_jumps / Jsum  # temporary normalization for probability calc
+    vapply(thr_vec, function(t) sum(w[z_atoms >= t]), numeric(1))
+  }

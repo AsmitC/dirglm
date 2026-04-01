@@ -7,10 +7,15 @@
 #' @param burnin Number of burn-in MCMC iterations. Defaults to 100.
 #' @param thin Factor by which to thin MCMC iterations. Defaults to 10.
 #' @param save Number of MCMC samples to return. Defaults to 1000.
-#' @param rho MCMC update step size. Either a single number or a vector matching
-#' the length of \code{beta}.
 #' @param mb Prior mean for beta. Defaults to a p-length vector whose entries are all 0.
 #' @param Sb Vector containing the diagonal entries in the prior variance-covariance matrix for beta.
+#' @param min_y Smallest value in theoretical support.
+#' @param max_y Largest value in theoretical support.
+#' @param M Number of atoms to sample for CRM.
+#' @param alpha Tuning parameter.
+#' @param delta Tuning parameter.
+#' @param c0 Tuning parameter.
+#' @param robust Provides numerical stability. Defaults to \code{TRUE}. See details for more.
 #' @param gamma Shrinkage parameter for the (default) prior variance on \code{beta}.
 #' Defaults to 1. Will not be used if \code{Sb} is specified in \code{dirglm}.
 #' @param mu0 Mean of the reference distribution. The reference distribution is
@@ -19,25 +24,29 @@
 #' may cause numerical instability. This is an optional argument with \code{mean(y)}
 #' being the default value.
 #' @param eps Padding for the theoretical support. Defaults to 1e-6.
-#' @param spt Theoretical support of the response variable. Defaults to the
-#' empirical distribution of \code{y}.
 #' @param betaStart Initial value for the regression coefficients \code{beta}.
 #' Defaults to the output obtained by fitting \code{gldrm}.
+#' @param varbetaStart Covariance matrix for \code{betaStart}. 
+#' @param thetaStart Initial value for the canonical parameter \code{theta}.
 #' @param crmStart Initial value for the reference distribution.
 #' Defaults to the output obtained by fitting \code{gldrm}.
 #' @param seed Random seed. Defaults to NULL.
 #'
 #' @return Object of S3 class "dpglmControl"
+#' 
+#' @details Setting \code{robust = TRUE} will tilt the CRM weights at each MCMC iteration
+#' to have the desired mean \text{mu0}. If \code{robust = FALSE}, these weights can be large
+#' and cause downstream numerical instability.
 #'
 #' @export
 dpglm.control <- function(burnin=100, thin=10, save=1000,
                           mb=NULL, Sb=NULL,
                           min_y=NULL, max_y=NULL,
-                          M=50, alpha=1, delta=2, c0=NULL,
+                          M=20, alpha=1, delta=2, c0=NULL, robust=TRUE,
                           gamma=1, mu0=NULL, spt=NULL, flag=c("dpglm", "copula", "ods"), eps=1e-6,
-                          copula=list(),
+                          copula=list(), ods=list(), 
                           betaStart=NULL, varbetaStart=NULL, thetaStart=NULL, crmStart=NULL,
-                          seed=NULL) # add min_y, max_y
+                          seed=NULL)
 {
   if (burnin < 0 || floor(burnin) != burnin) stop("Number of burn-in samples must be an integer >= 0")
   if (thin   < 1 || floor(thin)   != thin)   stop("Thin must be an integer >= 1")
@@ -52,6 +61,7 @@ dpglm.control <- function(burnin=100, thin=10, save=1000,
                alpha        = alpha,
                delta        = delta,
                c0           = c0,
+               robust       = robust,
                gamma        = gamma,
                mu0          = mu0,
                spt          = spt,
@@ -73,7 +83,7 @@ dpglm.control <- function(burnin=100, thin=10, save=1000,
 #' @keywords internal
 dpglmFit <- function(formula, data, X, y,        # Data
                      link,                       # Link
-                     mu0, init,             # Specs
+                     mu0, init,                  # Specs
                      dpglmControl, thetaControl) # Controls
 {
   # Extract dpglmControl parameters
@@ -86,15 +96,13 @@ dpglmFit <- function(formula, data, X, y,        # Data
   alpha        <- dpglmControl$alpha
   delta        <- dpglmControl$delta
   c0           <- dpglmControl$c0
+  robust       <- dpglmControl$robust
   gamma        <- dpglmControl$gamma
   spt          <- dpglmControl$spt
   flag         <- dpglmControl$flag
   eps          <- dpglmControl$eps
   copula       <- dpglmControl$copula
   seed         <- dpglmControl$seed
-
-  ebp <- 2L # 0 1 or 2
-
 
   # Set theoretical support bounds
   if (is.null(spt)) spt <- c(min(y) - eps, max(y) + eps)
@@ -144,23 +152,19 @@ dpglmFit <- function(formula, data, X, y,        # Data
   crm_samples   <- list()
   lnlik_samples <- numeric(iter)
 
-  # gldrm_fit <- gldrm(y ~ X[, -1], link = link) # E old
   beta_samples[1, ] <- beta <- as.numeric(init$beta)
   beta_mode <- beta
-  #beta_cov <- gldrm_fit$varbeta # What to do about this
-  beta_cov <- init$varbeta # this
+  beta_cov <- init$varbeta
   meanY_x <- linkinv(X %*% beta)
   z.tld <- z_tld <-  as.numeric(init$crm$z.tld)
   J.tld <- J_tld <- as.numeric(init$crm$J.tld)
-  cat("Initial sum(J.tld) =", sum(J.tld), "\n")
   crm_samples[[1]] <- list(z.tld = z.tld, J.tld = J.tld)
 
   ord <- order(J_tld)[1:M]
   
   RL <- z_tld[ord]
   RJ <- J_tld[ord]
-  #theta_samples[1, ] <- theta <- true_theta #gldrm_fit$theta %>% as.numeric() # What to do about this
-  theta_samples[1, ] <- theta <- init$theta # this
+  theta_samples[1, ] <- theta <- init$theta
   z_samples[1, ] <- z <- z_sampler_unifK(y, c0, z.tld, J.tld, theta, min_y, max_y, eps)
 
   btheta <- b_theta(theta, z.tld, J.tld)
@@ -195,15 +199,12 @@ dpglmFit <- function(formula, data, X, y,        # Data
   Jtilt <- temp * J.tld
   W <- sum(Jtilt)
   Jtld_0 <- Jtilt / W
-  if (ebp == 0L) {
-    J.tld_ll <- Jtld_0
-  } else if (ebp == 1L) {
+  if (robust) {
     J.tld <- Jtilt
-    J.tld_ll <- J.tld
-  } else if (ebp == 2L){
-    J.tld <- Jtld_0
-    J.tld_ll <- J.tld
-  } else stop("ebp not in {0, 1, 2}")
+    J.tld_ll <- Jtld_0
+  } else {
+    J.tld_ll <- Jtld_0
+  }
 
   lnlik_samples[1] <- lnlik <- loglik(linkinv = linkinv, z = z, X = X, beta = beta, atoms = z.tld, jumps = J.tld_ll)
 
@@ -226,20 +227,19 @@ dpglmFit <- function(formula, data, X, y,        # Data
     gMprime <- linkfun(Mprime)
     sdX     <- c(apply(as.matrix(X[, -1], nrow=n), 2, sd))
     Sbvec   <- (gMprime - gmprime)^2 * c(100, (gamma / (2 * sdX))^2) # Re-scaling on the linear-predictor scale
-    #Sb      <- diag(Sbvec)
-    Sb <- sqrt(Sbvec) # Entries corresponding to sqrt(diagonal) of beta prior cov (i.e. standard devs)
+    Sb <- sqrt(Sbvec) # Entries corresponding to sqrt(diagonal) of beta prior cov
   } else if (length(Sb) != p) stop("length(Sb) must match the number of betas.")
   else if (any(Sb <= 0)) stop("Sb must be positive definite.")
 
   sd_theta <- rep(1, n) # Initial proposal standard deviation for theta_tilde
   ub <- max(burnin, floor(iter) / 2)
   for(itr in 2:iter){
-    #message(sprintf("Starting iter: %d", itr))
+    if(itr%%250==0) cat("Starting iteration: %s", itr)
     # Optimization to find the mode
     result <- tryCatch({
       optim(par = beta, fn = logpost_beta, linkinv = linkinv, z = z, X = X,
-            atoms = z.tld, jumps  = J.tld, mu_beta = mb, # Used to be mu_beta
-            sigma_beta = Sb, h = h, # Used to be sigma_beta
+            atoms = z.tld, jumps  = J.tld, mu_beta = mb,
+            sigma_beta = Sb, h = h,
             control = list(fnscale = -1), hessian = TRUE)
     }, error = function(e) {
       message(e)
@@ -270,8 +270,6 @@ dpglmFit <- function(formula, data, X, y,        # Data
           # Sample new beta from proposal distribution
           beta_ <- as.numeric(rmvnorm(n = 1, mean = beta_mode_, sigma = beta_cov_))
           
-          #mean_z_ <- exp(X %*% beta_) / (1 + exp(X %*% beta_))
-          # mean_z_ <- plogis(X %*% beta_) # E old
           mean_z_ <- linkinv(X %*% beta_)
           
           if (min(mean_z_) >= min(z.tld) && max(mean_z_) <= max(z.tld)) {
@@ -337,7 +335,6 @@ dpglmFit <- function(formula, data, X, y,        # Data
       theta[idx] <- 50
       warning("Capped some values of Theta at 50. Consider increasing M.")
     }
-    #message("  theta updated successfully")
 
     # h update ------------------------------------
     if (flag == "copula") h <- log_copula_contribution_by_obs(y, group_index, rho,
@@ -345,7 +342,6 @@ dpglmFit <- function(formula, data, X, y,        # Data
                                                               min_y, max_y)
     # u update ----------------------------------------
     u <- sampler_u(u, zstar, nstar, theta, alpha, delta, min_y, max_y, eps, h)
-    #message("  u updated successfully")
   
     # CRM update --------------------------------------
     if(itr == ub + 1) {
@@ -358,7 +354,7 @@ dpglmFit <- function(formula, data, X, y,        # Data
     
     if(min(meanY_x) >= min(z.tld_star) && max(meanY_x) <= max(z.tld_star)){
       # MH step
-      theta_star <- gldrm:::getTheta( # rename to theta_star
+      theta_star <- gldrm:::getTheta(
         spt = z.tld_star,
         f0  = J.tld_star,
         mu  = meanY_x,
@@ -381,7 +377,6 @@ dpglmFit <- function(formula, data, X, y,        # Data
       b2 <- b_theta(theta, z.tld, J.tld)
       b3 <- b_theta(theta_tilde, z.tld, J.tld)
       b4 <- b_theta(theta_tilde, z.tld_star, J.tld_star)
-      # log_r <- sum(2*(theta_star - theta)*z + hstar - h - b1 + b2 - b3 + b4)
       log_r <- sum((theta_star - theta)*z - b1 + b2 - b3 + b4) +
         sum(dnorm(theta_tilde, mean = theta_star, sd = sd_theta, log = TRUE) - 
         dnorm(theta_tilde, mean = theta, sd = sd_theta, log = TRUE))
@@ -398,10 +393,9 @@ dpglmFit <- function(formula, data, X, y,        # Data
       }
     }
     
-    #message("  crm updated successfully")
     # z update ------------------------------------------------------------------
     z <- z_sampler_unifK(y, c0, z.tld, J.tld, theta, min_y, max_y, eps)
-    #message("  z updated successfully")
+    
     # zstar and nstar update ----------------------------------------------------
     resampled_z <- resample_zstar(z)
     zstar <- resampled_z$zstar
@@ -410,7 +404,7 @@ dpglmFit <- function(formula, data, X, y,        # Data
     theta0 <- gldrm:::getTheta(
       spt = z.tld,
       f0  = J.tld,
-      mu  = mu0, # Used to be m0
+      mu  = mu0,
       sampprobs  = NULL,
       ySptIndex  = NULL,
       thetaStart = NULL
@@ -445,31 +439,13 @@ dpglmFit <- function(formula, data, X, y,        # Data
     Jtilt <- temp * J.tld
     W <- sum(Jtilt)
     Jtld_0 <- Jtilt / W
-    if (ebp == 0L) {
+    if (robust) {
+    J.tld <- Jtilt
+    J.tld_ll <- Jtld_0
+    } else {
       J.tld_ll <- Jtld_0
-    } else if (ebp == 1L) {
-      J.tld <- Jtilt
-      J.tld_ll <- J.tld
-    } else if (ebp == 2L){
-      J.tld <- Jtld_0
-      J.tld_ll <- J.tld
-    } else stop("ebp not in {0, 1, 2}")
-    #message("  loglik calculated successfully")
-    if (itr %% 250 == 0) {
-      Jsum <- sum(J.tld)
-      Jnorm <- J.tld / Jsum
-      cat(
-        "itr", itr,
-        "| ebp=", ebp,
-        "| sumJ=", format(Jsum, scientific=TRUE),
-        "| Jmax_share=", round(max(Jnorm), 3),
-        "| ess(J)=", round(1/sum(Jnorm^2), 3),
-        "| W=", format(W, scientific=TRUE),
-        "| mean(Jtld_0)=", round(sum(z.tld * Jtld_0), 6),
-        "| mu0=", round(mu0, 6),
-        "\n\n"
-      )
     }
+  
     lnlik <- loglik(linkinv = linkinv, z = z, X = X, beta = beta, atoms = z.tld, jumps = J.tld_ll)
     
     # Storing MCMC simulations --------------------------------------------------
@@ -489,14 +465,11 @@ dpglmFit <- function(formula, data, X, y,        # Data
   samples <- list(z = z_samples, beta = beta_samples,
                   crm = crm_samples, theta = theta_samples)
   
-  # A: Add priors to this later?
-  # Control params?
-  # iter? So people dont have to calculate?
-  list(samples    = samples,
-       mb         = mb,
-       Sb         = Sb,
-       spt        = spt,
-       mu0        = mu0,
-       p_acc_beta = count1 / iter,
-       p_acc_crm  = count2 / iter)
+  list(samples         = samples,
+       mb              = mb,
+       Sb              = Sb,
+       spt             = spt,
+       mu0             = mu0,
+       beta_acceptance = count1 / iter,
+       crm_acceptance  = count2 / iter)
 }
