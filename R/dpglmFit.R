@@ -233,7 +233,7 @@ dpglmFit <- function(formula, data, X, y,        # Data
   dn    <- 0L
   ub <- max(burnin, floor(iter) / 2)
   for(itr in 2:iter){
-    if(itr%%250==0) cat("Starting iteration:", itr)
+    if(itr%%10==0) cat("Starting iteration:", itr)
     # Optimization to find the mode
     result <- tryCatch({
       optim(par = beta, fn = logpost_beta, linkinv = linkinv, z = z, X = X,

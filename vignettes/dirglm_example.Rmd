@@ -260,12 +260,12 @@ sim_data <- function(n, true_beta) {
 
 # Run simulation
 set.seed(832)
-iter <- 500
-dat <- sim_data(50, truth1$beta)
+iter <- 1000
+dat <- sim_data(1000, truth1$beta)
 truth1$f0[, 2] <- truth1$f0[, 2] / sum(truth1$f0[, 2])
 fit <- dpglm(Y ~ X2, data = data.frame(Y = dat$Y, X2 = dat$X2), link = "logit",
-             dpglmControl = dpglm.control(burnin = 0, thin = 1, save = iter,
-                                          seed = 832, spt = c(0, 1)))
+             dpglmControl = dpglm.control(save = iter,
+                                          seed = 832))
 ```
 
 ```{r}
