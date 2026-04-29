@@ -106,7 +106,6 @@ dpglmFit <- function(formula, data, X, y,        # Data
   alpha        <- dpglmControl$alpha
   delta        <- dpglmControl$delta
   c0           <- dpglmControl$c0
-  robust       <- dpglmControl$robust
   gamma        <- dpglmControl$gamma
   eps          <- dpglmControl$eps
   copula       <- dpglmControl$copula
@@ -226,14 +225,9 @@ dpglmFit <- function(formula, data, X, y,        # Data
   } else if (length(Sb) != p) stop("length(Sb) must match the number of betas.")
   else if (any(Sb <= 0)) stop("Sb must be positive definite.")
 
-  sd_theta <- rep(1, n)   # proposal sd for theta tilde before calibration
-  ub <- max(burnin, floor(iter / 2))
-  dsum  <- rep(0, n) # cumulative sum of theta_star - theta
-  dsqsum <- rep(0, n) # cumulative sum of (theta_star - theta)^2
-  dn    <- 0L
-  ub <- max(burnin, floor(iter) / 2)
+  # Start MCMC loop
   for(itr in 2:iter){
-    if(itr%%10==0) cat("Starting iteration:", itr)
+    if(itr%%50==0) cat("\nStarting iteration:", itr)
     # Optimization to find the mode
     result <- tryCatch({
       optim(par = beta, fn = logpost_beta, linkinv = linkinv, z = z, X = X,
@@ -343,17 +337,13 @@ dpglmFit <- function(formula, data, X, y,        # Data
     u <- sampler_u(u, zstar, nstar, theta, alpha, delta, min_y, max_y, eps, h)
   
     # CRM update --------------------------------------
-    if (itr == ub + 1) {
-      dmean  <- dsum / dn
-      dsqmean <- dsqsum / dn
-      dvar <- pmax(dsqmean - dmean^2, eps)
-      sd_theta <- sqrt(dvar)
-    }
-
-    crm_star <- crm_sampler(M, u, zstar, nstar, theta, sd_theta, alpha, min_y, max_y, eps, h, itr)
+    crm_star <- crm_sampler(M, u, zstar, nstar, theta, alpha, min_y, max_y, eps, h, itr)
     z.tld_star <- c(crm_star$RL, crm_star$zstar)
     J.tld_star <- c(crm_star$RJ, crm_star$Jstar)
-    theta_tilde <- crm_star$theta_tilde
+
+    crm_2 <- crm_sampler(M, u, zstar, nstar, theta, alpha, min_y, max_y, eps, h, itr)
+    z.tld_2 <- c(crm_2$RL, crm_2$zstar)
+    J.tld_2 <- c(crm_2$RJ, crm_2$Jstar)
     
     if(min(meanY_x) >= min(z.tld_star) && max(meanY_x) <= max(z.tld_star)){
       # MH step
@@ -366,14 +356,6 @@ dpglmFit <- function(formula, data, X, y,        # Data
         thetaStart = theta
       )$theta
 
-      # Collect proposal jump moments in initial iterations
-      if (itr <= ub) {
-        di <- theta_star - theta
-        dsum  <- dsum  + di
-        dsqsum <- dsqsum + di^2
-        dn    <- dn + 1L
-      }
-
       if (any(theta_star > 50)) {
         idx <- which(theta_star > 50)
         theta_star[idx] <- 50
@@ -384,13 +366,29 @@ dpglmFit <- function(formula, data, X, y,        # Data
                                                                     crm.atoms = z.tld_star, crm.jumps = J.tld_star, theta = theta_star, c0,
                                                                     min_y, max_y)
       
-      b1 <- b_theta(theta_star, z.tld_star, J.tld_star)
-      b2 <- b_theta(theta, z.tld, J.tld)
-      b3 <- b_theta(theta_tilde, z.tld, J.tld)
-      b4 <- b_theta(theta_tilde, z.tld_star, J.tld_star)
-      log_r <- sum((theta_star - theta)*z - b1 + b2 - b3 + b4) +
-        sum(dnorm(theta_tilde, mean = theta_star, sd = sd_theta, log = TRUE) - 
-        dnorm(theta_tilde, mean = theta, sd = sd_theta, log = TRUE))
+      crm_star_2 <- crm_sampler(M, u, zstar, nstar, theta_star, alpha, min_y, max_y, eps, h, itr)
+      z.tld_star_2 <- c(crm_star_2$RL, crm_star_2$zstar)
+      J.tld_star_2 <- c(crm_star_2$RJ, crm_star_2$Jstar)
+
+      b_thstar_crmstar <- b_theta(theta_star, z.tld_star, J.tld_star)
+      b_th_crm         <- b_theta(theta,      z.tld,      J.tld)
+      b_thstar_crm     <- b_theta(theta_star, z.tld,      J.tld)
+      b_th_crmstar     <- b_theta(theta,      z.tld_star, J.tld_star)
+
+      b_th_crmstar2    <- b_theta(theta,      z.tld_star_2, J.tld_star_2)
+      b_thstar_crmstar2 <- b_theta(theta_star, z.tld_star_2, J.tld_star_2)
+      b_th_crm2        <- b_theta(theta,      z.tld_2,      J.tld_2)
+      b_thstar_crm2    <- b_theta(theta_star, z.tld_2,      J.tld_2)
+
+      log_r <- sum(
+        (theta_star - theta) * z -
+          b_thstar_crmstar + b_th_crm -
+          b_thstar_crm + b_th_crmstar
+      ) +
+        sum(
+          -b_th_crmstar2 + b_thstar_crmstar2 +
+            b_th_crm2 - b_thstar_crm2
+        )
       
       if(log(runif(1)) < log_r){
         count2 <- count2 + 1

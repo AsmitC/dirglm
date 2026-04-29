@@ -217,10 +217,10 @@ truth1 <- list(
   f0   = matrix(c(spt, f0_kde), ncol = 2, byrow = FALSE)
 )
 
-truth2 <- list(
-  beta = c(0.2, 0.7),
-  f0   = matrix(c(spt, f0_kde), ncol = 2, byrow = FALSE)
-)
+# truth2 <- list(
+#   beta = c(0.2, 0.7),
+#   f0   = matrix(c(spt, f0_kde), ncol = 2, byrow = FALSE)
+# )
 
 ## --------------------------
 ## Data generator
@@ -264,7 +264,7 @@ iter <- 1000
 dat <- sim_data(1000, truth1$beta)
 truth1$f0[, 2] <- truth1$f0[, 2] / sum(truth1$f0[, 2])
 fit <- dpglm(Y ~ X2, data = data.frame(Y = dat$Y, X2 = dat$X2), link = "logit",
-             dpglmControl = dpglm.control(save = iter,
+             dpglmControl = dpglm.control(save = iter, thin = 1,
                                           seed = 832))
 ```
 
@@ -322,7 +322,7 @@ summ_num <- function(x, name = deparse(substitute(x))) {
 }
 
 # Beta
-new_beta_mat <- fit$samples$beta
+new_beta_mat <- fit$samples$beta[101:1100,]
 new_beta_mean <- colMeans(new_beta_mat, na.rm = TRUE)
 new_beta_sd   <- apply(new_beta_mat, 2, sd, na.rm = TRUE)
 
@@ -333,7 +333,7 @@ cat("crm_acceptance  =", fit$crm_acceptance, "\n")
 # CRM
 new_zlist <- fit$samples$crm$z.tld
 new_Jlist <- fit$samples$crm$J.tld
-new_crm_df <- crm_metrics(new_zlist, new_Jlist)
+new_crm_df <- crm_metrics(new_zlist, new_Jlist)[101:1100,]
 
 cat("\n--- CRM summary---\n")
 print(rbind(

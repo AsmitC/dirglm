@@ -596,12 +596,12 @@ b_theta <- function(theta, spt, f0) { # Add arg H, type?
 #                               CRM update                                   #
 # --------------------------------------------------------------------------- #
 
-crm_sampler <- function(M, u, zstar, nstar, tht_, sd_, alpha, min_y, max_y, eps, h, itr){
+crm_sampler <- function(M, u, zstar, nstar, theta, alpha, min_y, max_y, eps, h, itr){
   N <- 3001
   R <- 3001
   s <- -log(seq(exp(-eps), exp(-5e-4), length.out = N))
 
-  tht <- rnorm(length(tht_), mean = tht_, sd = sd_)
+  tht <- theta
   
   # Sorted, ascending order, needed in RL
   #z <- seq(eps, 1 - eps, length.out = R)
