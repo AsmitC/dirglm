@@ -30,14 +30,17 @@
 #' Defaults to \code{TRUE}.
 #' @param seed Random seed. Defaults to NULL.
 #'
-#' @return Object of S3 class "dirglmControl"
+#' @return Object of S3 class "dirglmControl"; a list of control parameters
+#' for the Dir-GLM fitting function.
 #' 
 #' @examples
+#' \dontrun{
 #' ctrl <- dirglm.control(burnin = 100,
 #'                        thin = 2,
 #'                        save = 500,
 #'                        spt = 0:1,
 #'                        seed = 123)
+#' }
 #'
 #' @export
 dirglm.control <- function(burnin=100, thin=10, save=1000, rho=0.1,
@@ -69,8 +72,29 @@ dirglm.control <- function(burnin=100, thin=10, save=1000, rho=0.1,
   ctrl
 }
 
-#' Main MCMC function
-#' This function is called by the main \code{dirglm} function.
+#' Main MCMC Fitting Function for the Dir-GLM
+#'
+#' Internal function used by \code{\link{dirglm}}.
+#' Performs MCMC to update model parameters.
+#'
+#' @param formula Model formula supplied to \code{\link{dirglm}}.
+#' @param data Data frame containing the variables appearing in \code{formula}.
+#' @param X Numeric design matrix.
+#' @param y Numeric response vector.
+#' @param link Link object containing \code{linkfun}, \code{linkinv},
+#' and \code{mu.eta}.
+#' @param mu0 Numeric target mean used to identify the reference distribution.
+#' @param spt Numeric vector giving the support of the response variable.
+#' @param init List of initial values for the MCMC algorithm.
+#' @param dirglmControl Object of class \code{"dirglmControl"} containing
+#' MCMC and tuning parameters.
+#' @param thetaControl Object of class \code{"thetaControl"} containing
+#' control arguments for the theta update.
+#'
+#' @return
+#' A list containing posterior samples, acceptance rates, prior settings,
+#' and model specification information used by \code{\link{dirglm}}.
+#'
 #' @keywords internal
 dirglmFit <- function(formula, data, X, y,                # Data
                       link,                               # Link

@@ -1,7 +1,16 @@
 ## Required packages -----
-## gldrm, mvtnorm
+## gldrm, mvtnorm, extraDistr
 
-## Computes log(sum(exp(x))) with better precision
+#' Stable Log-Sum-Exp
+#'
+#' Computes \eqn{\log \sum_j \exp(x_j)} using a numerically stable
+#' log-sum-exp calculation.
+#'
+#' @param x Numeric vector.
+#'
+#' @return A numeric scalar.
+#'
+#' @keywords internal
 logSumExp <- function(x)
 {
   i <- which.max(x)
@@ -10,19 +19,26 @@ logSumExp <- function(x)
   lse
 }
 
-#' Title: function for finding theta, btheta & bprime2
+#' Solve for Exponential-Tilting Parameters
 #'
-#' @param spt (vector) support, \{s_j, j = 1(1)l\}, of response variable y
-#' @param f0 (vector) \{f0(y = s_j), j=1(1)l\}: free parameter, f0(.) centering density
-#' @param mu (vector) \{E(y_i | x_i), i=1(1)n\}
-#' @param thtst (vector) initial value in theta solving iterative algorithm
+#' Computes the observation-specific tilting parameters, normalizing constants,
+#' and second derivatives for the exponential-tilting model.
 #'
-#' @return (list) containing:
-#' 1. bpr2 (vector) \{second derivative of b(theta_i), i=1(1)n\}
-#' 2. tht (vector) derived parameter theta = \{theta_i = function(beta, f0, x_i), i=1(1)n\}
-#' 3. btht (vector)  normalizing constant b(theta) = \{b(theta_i), i=1(1)n\}
+#' @param spt Numeric vector giving the support points of the response.
+#' @param f0 Numeric vector giving the baseline mass or density evaluated on
+#'   \code{spt}.
+#' @param mu Numeric vector of target conditional means.
+#' @param thtst Optional numeric vector of starting values for the tilting
+#'   parameters.
+#'
+#' @return A list with components:
+#' \describe{
+#'   \item{\code{bpr2}}{Second derivatives of the cumulant function.}
+#'   \item{\code{tht}}{Tilting parameters.}
+#'   \item{\code{btht}}{Normalizing constants \eqn{b(\theta_i)}.}
+#' }
+#'
 #' @keywords internal
-
 tht_sol <- function(spt, f0, mu, thtst) {
   out <- gldrm:::getTheta(
     spt = spt,
@@ -40,17 +56,21 @@ tht_sol <- function(spt, f0, mu, thtst) {
   return(list(bpr2 = bpr2, tht = tht, btht = btht))
 }
 
-#' Title: function for finding dirichlet proposal parameter
+#' Compute Dirichlet Proposal Parameters
 #'
-#' @param y (vector) response variable values \{y_i, i=1(1)n\}
-#' @param tht (vector) derived parameter, \{theta_i = function(beta, f0, x_i), i=1(1)n\}
-#' @param btht (vector)  normalizing constant b(theta) = \{b(theta_i), i=1(1)n\}
-#' @param dir_pr_parm (vector) dirichlet prior parameter
-#' @param ind_mt indicator matrix with (i,j)th element: 1(y_i == s_j)
+#' Constructs the Dirichlet proposal parameter vector used in the update of the
+#' baseline distribution.
 #'
-#' @return (vector) dirichlet proposal parameter
+#' @param y Numeric response vector.
+#' @param tht Numeric vector of current tilting parameters.
+#' @param btht Numeric vector of current normalizing constants.
+#' @param dir_pr_parm Numeric vector of Dirichlet prior parameters.
+#' @param ind_mt Indicator matrix whose \eqn{(i,j)} entry identifies whether
+#' response observation \eqn{i} equals support point \eqn{j}.
+#'
+#' @return Numeric vector of Dirichlet proposal parameters.
+#'
 #' @keywords internal
-
 dir_parm <- function(y, tht, btht, dir_pr_parm, ind_mt) {
   wgt  <- (1 / exp(tht * y - btht)) / sum(1 / exp(tht * y - btht))
   wgt  <- as.numeric(wgt)
@@ -59,7 +79,7 @@ dir_parm <- function(y, tht, btht, dir_pr_parm, ind_mt) {
   return(parm)
 }
 
-#' Title: function for log Dir pdf for x ~ Dir(a)
+#' Function for log Dir pdf for x ~ Dir(a)
 #'
 #' @param x (vector) value at which to evaluate pdf
 #' @param a (vector) Dirichlet parameter
@@ -73,7 +93,7 @@ lDir = function(x, a){
   return(f)
 }
 
-#' Title: function for calculating \{f0(y_i), i = 1(1)n\}
+#' Function for calculating \{f0(y_i), i = 1(1)n\}
 #'
 #' @param y (vector) response variable
 #' @param spt (vector) support, \{s_j, j = 1(1)l\}, of response variable y
@@ -81,14 +101,13 @@ lDir = function(x, a){
 #'
 #' @return (vector) \{f0(y_i), i=1(1)n\}
 #' @keywords internal
-
 f0y <- function(y, spt, f0) {
   ind_mt <- outer(spt, y, `==`)
   f0_y <- colSums(f0 * ind_mt)
   return(f0_y)
 }
 
-#' Title: function for finding variance-covariance matrix of beta
+#' Function for finding variance-covariance matrix of beta
 #'
 #' @param X design (matrix)
 #' @param mu (vector) \{E(y_i | x_i), i=1(1)n\}
@@ -97,7 +116,6 @@ f0y <- function(y, spt, f0) {
 #'
 #' @return variance-covariance (matrix) of beta
 #' @keywords internal
-
 Sigma_beta <- function(X, mu, bpr2, rho, linkfun, mu.eta) {
   eta <- linkfun(mu)
   # gpr <- as.numeric(1 / mu)              # due to log link: g'(mu) = 1 / mu
@@ -110,7 +128,7 @@ Sigma_beta <- function(X, mu, bpr2, rho, linkfun, mu.eta) {
   return(Sigma)
 }
 
-#' Title: function for updating f0
+#' Function for updating f0
 #'
 #' @param y response variable
 #' @param spt y support
@@ -189,7 +207,7 @@ f0_update <- function(y,
 
 
 
-#' Title : function for updating beta (jointly)
+#' Function for updating beta (jointly)
 #'
 #' @param X design matrix
 #' @param y response variable
@@ -276,7 +294,7 @@ beta_update_joint <- function(X,
 
 
 
-#' Title: function for updating beta (one at a time)
+#' Function for updating beta (one at a time)
 #'
 #' @param X design matrix
 #' @param y response variable
@@ -365,9 +383,8 @@ beta_update_separate <- function(X,
   ))
 }
 
-
 #####################################
-# ALL FUNCTIOMS BELOW ARE FOR DPGLM #
+### FUNCTIOMS BELOW ARE FOR DPGLM ###
 #####################################
 # -----------------------------------------------------------------------------#
 #                               Update z                                      #
@@ -402,65 +419,48 @@ c0_silverman <- function(y) {
   return(0.9 * min(sd_y, iqr_y / 1.34) * n^(-1/5))
 }
 
-z_sampler_triK <- function(y, c0, crm.atoms, crm.jumps, tht) {
-  n <- length(y)
-  z <- numeric(n)
-  
-  for (i in 1:n) {
-    # Compute triangular kernel weights
-    tri_weight <- pmax(0, 1 - abs((y[i] - crm.atoms) / c0))
-    
-    # Compute log probabilities
-    log_prob <- log(tri_weight) + (tht[i] * crm.atoms) + log(crm.jumps)
-    
-    # Normalize and sample
-    prob <- exp(log_prob - max(log_prob))
-    prob <- prob / sum(prob)
-    
-    # Sample z[i] based on triangular kernel weighting
-    z[i] <- sample(crm.atoms, 1, prob = prob)
-  }
-  
-  return(z)
-}
-
-z_sampler_epanK <- function(y, c0, crm.atoms, crm.jumps, tht) {
-  n <- length(y)
-  z <- numeric(n)
-  
-  for (i in 1:n) {
-    # Compute Epanechnikov kernel weights
-    epan_weight <- (3/4) * (1 - ((y[i] - crm.atoms) / c0)^2)
-    epan_weight[abs(y[i] - crm.atoms) > c0] <- 0  # Ensure weights are 0 outside the range
-    
-    # Compute log probabilities
-    log_prob <- log(epan_weight) + (tht[i] * crm.atoms) + log(crm.jumps)
-    
-    # Normalize and sample
-    prob <- exp(log_prob - max(log_prob))
-    prob <- prob / sum(prob)  
-    
-    # Sample z[i] based on Epanechnikov kernel weighting
-    z[i] <- sample(crm.atoms, 1, prob = prob)
-  }
-  
-  return(z)
-}
-
-
-# -----------------------------------------------------------------------------#
-#                               Resample z                                     #
-# -----------------------------------------------------------------------------#
-
+#' Resample Unique Latent Atom Locations
+#'
+#' Collapses the current latent atom assignments into unique atom locations and
+#' their multiplicities. These unique values are used as the fixed-location
+#' component in the CRM update.
+#'
+#' @param z Numeric vector of latent atom assignments.
+#'
+#' @return A list with components:
+#' \describe{
+#'   \item{\code{zstar}}{Numeric vector of unique latent atom locations.}
+#'   \item{\code{nstar}}{Numeric vector of multiplicities corresponding to
+#'   \code{zstar}.}
+#' }
+#'
+#' @keywords internal
 resample_zstar <- function(z){
   z_table <- table(z)
   zstar   <- as.numeric(names(z_table))
   nstar   <- as.numeric(z_table)
-  ## Write code for resampling zstar to avoid the ‘sticky clusters effect’
-  
   return(list(zstar = zstar, nstar = nstar))
 }
 
+#' Log Posterior Kernel for Beta
+#'
+#' Evaluates the log posterior kernel for beta conditional on
+#' the currently imputed values.
+#'
+#' @param beta Numeric vector of regression coefficients.
+#' @param linkinv Inverse link function mapping linear predictors to means.
+#' @param z Numeric vector of latent atom assignments.
+#' @param X Numeric design matrix.
+#' @param atoms Numeric vector of CRM atom locations.
+#' @param jumps Numeric vector of CRM jump weights.
+#' @param mu_beta Numeric vector giving the prior mean for \code{beta}.
+#' @param sigma_beta Numeric vector giving the prior standard deviations for
+#' \code{beta}.
+#' @param h Numeric vector of log-likelihood contributions from dependence.
+#'
+#' @return Numeric scalar giving the log posterior kernel, up to proportionality.
+#'
+#' @keywords internal
 logpost_beta <- function(beta, linkinv, z, X, atoms, jumps, mu_beta, sigma_beta, h){
   n <- length(z)
   mu <- linkinv(X %*% beta)
@@ -471,6 +471,21 @@ logpost_beta <- function(beta, linkinv, z, X, atoms, jumps, mu_beta, sigma_beta,
   return(log_post)
 }
 
+#' Model Log Likelihood
+#'
+#' Computes the observed log likelihood contribution under
+#' the currently imputed values.
+#'
+#' @param linkinv Inverse link function.
+#' @param z Numeric vector of latent atom assignments.
+#' @param X Numeric design matrix.
+#' @param beta Numeric vector of regression coefficients.
+#' @param atoms Numeric vector of CRM atom locations.
+#' @param jumps Numeric vector of CRM jump weights.
+#'
+#' @return Numeric scalar giving the log likelihood.
+#'
+#' @keywords internal
 loglik <- function(linkinv, z, X, beta, atoms, jumps){
   n <- length(z)
   #mu <- exp(X %*% beta) / (1 + exp(X %*% beta))   
@@ -489,7 +504,25 @@ loglik <- function(linkinv, z, X, beta, atoms, jumps){
   return(loglik)
 }
 
-
+#' Log Posterior Kernel for u
+#'
+#' Evaluates the log posterior kernel for the auxiliary variables \code{u} used
+#' in the CRM representation.
+#'
+#' @param u Numeric vector of auxiliary variables.
+#' @param zstar Numeric vector of unique latent atom locations.
+#' @param nstar Numeric vector of multiplicities corresponding to \code{zstar}.
+#' @param theta Numeric vector of observation-specific tilting parameters.
+#' @param alpha Numeric concentration parameter for the CRM prior.
+#' @param min_y Numeric lower bound of the response support.
+#' @param max_y Numeric upper bound of the response support.
+#' @param eps Numeric boundary padding constant.
+#' @param h Numeric vector of log-likelihood contributions from dependence.
+#'
+#' @return Numeric scalar giving the log posterior kernel for \code{u}
+#' up to proportionality.
+#'
+#' @keywords internal
 log_post_u <- function(u, zstar, nstar, theta, alpha, min_y, max_y, eps, h) {
   # Number of grid points for the continuous part
   R <- 250
@@ -530,6 +563,25 @@ log_post_u <- function(u, zstar, nstar, theta, alpha, min_y, max_y, eps, h) {
   return(-neg_log_post)
 }
 
+#' Update u
+#'
+#' Performs MH update for the auxiliary variables \code{u}.
+#' Each component is proposed from a Gamma random walk.
+#'
+#' @param u Numeric vector of current auxiliary variables.
+#' @param zstar Numeric vector of unique latent atom locations.
+#' @param nstar Numeric vector of multiplicities corresponding to \code{zstar}.
+#' @param theta Numeric vector of observation-specific tilting parameters.
+#' @param alpha Numeric concentration parameter for the CRM prior.
+#' @param delta Numeric tuning parameter for the Gamma proposal.
+#' @param min_y Numeric lower bound of the response support.
+#' @param max_y Numeric upper bound of the response support.
+#' @param eps Numeric boundary padding constant.
+#' @param h Numeric vector of log-likelihood contributions from dependence.
+#'
+#' @return Numeric vector of updated auxiliary variables.
+#'
+#' @keywords internal
 sampler_u <- function(u, zstar, nstar, theta, alpha, delta, min_y, max_y, eps, h) {
   n <- length(u) # Get the length of u
   
@@ -555,10 +607,6 @@ sampler_u <- function(u, zstar, nstar, theta, alpha, delta, min_y, max_y, eps, h
   return(u)
 }
 
-# --------------------------------------------------------------------------- #
-#                          For beta update                                   #
-# --------------------------------------------------------------------------- #
-
 #' Compute b(theta) for discrete base measure
 #'
 #' Calculates \eqn{b(\theta) = \log \left( \int \exp(\theta z) dG_0(z) \right)} for a discrete base measure \eqn{G_0}
@@ -570,18 +618,13 @@ sampler_u <- function(u, zstar, nstar, theta, alpha, delta, min_y, max_y, eps, h
 #'
 #' @return Numeric vector of \eqn{b(\theta)} values, one for each \code{theta}.
 #' @export
-
-b_theta <- function(theta, spt, f0) { # Add arg H, type?
-  log_f0_dz <- log(f0) #+ log(diff(spt)[1]) # log density values
+b_theta <- function(theta, spt, f0) {
+  log_f0_dz <- log(f0) # log density values
   
   # Create the log weights matrix of dimensions length(theta) x length(spt)
   # (i, j)th element is theta[i]*spt[j] + log(f0[j])
   log_weights <- outer(theta, spt, "*") +
     matrix(log_f0_dz, nrow = length(theta), ncol = length(spt), byrow = TRUE)
-
-  # Adding H, something like
-  #log_weights <- outer(theta, spt, "*")  + H(...),
-    #matrix(log_f0, nrow = length(theta), ncol = length(spt), byrow = TRUE)
   
   # Use log-sum-exp trick to compute b(theta) for each theta
   result <- apply(log_weights, 1, function(x) {
@@ -592,6 +635,30 @@ b_theta <- function(theta, spt, f0) { # Add arg H, type?
   return(as.vector(result))  # Ensure the output is a vector
 }
 
+#' Sample a CRM Proposal
+#'
+#' Generates a proposed CRM update.
+#'
+#' @param M Integer. Number of random CRM atoms to generate.
+#' @param u Numeric vector of auxiliary variables.
+#' @param zstar Numeric vector of unique occupied latent atom locations.
+#' @param nstar Numeric vector of multiplicities corresponding to \code{zstar}.
+#' @param theta Numeric vector of observation-specific tilting parameters.
+#' @param alpha Numeric concentration parameter for the CRM prior.
+#' @param min_y Numeric lower bound of the response support.
+#' @param max_y Numeric upper bound of the response support.
+#' @param eps Numeric boundary padding constant.
+#' @param h Numeric vector of log-likelihood contributions from dependence.
+#'
+#' @return A list with components:
+#' \describe{
+#'   \item{\code{RL}}{Random atom locations.}
+#'   \item{\code{RJ}}{Random jump sizes corresponding to \code{RL}.}
+#'   \item{\code{zstar}}{Fixed occupied atom locations.}
+#'   \item{\code{Jstar}}{Jump sizes for fixed occupied atom locations.}
+#' }
+#'
+#' @keywords internal
 crm_sampler <- function(M, u, zstar, nstar, theta, alpha,
                         min_y, max_y, eps, h = 0) {
   N <- 3001
@@ -678,25 +745,36 @@ crm_sampler <- function(M, u, zstar, nstar, theta, alpha,
   )
 }
 
-# ------------------------------------------------------------------
-# Compute observation-specific marginal CDFs F_{x_j}(y_j) using a
-# CRM-induced mixture of truncated uniform kernels.
-#
-# The mixture weights are covariate-dependent and vary across
-# observations through theta[j].
-#
-# Arguments:
-#   y         : numeric vector of outcomes (length n)
-#   crm.atoms : vector of CRM atoms (z_l)
-#   crm.jumps : vector of CRM jump sizes (J_l)
-#   theta   : numeric vector of covariate effects (length n)
-#   c0        : half-width of the uniform kernel
-#   min_y     : global lower bound of the outcome support
-#   max_y     : global upper bound of the outcome support
-#
-# Returns:
-#   Fy        : numeric vector of marginal CDF values F_{x_j}(y_j)
-# ------------------------------------------------------------------
+######################################
+### FUNCTIOMS BELOW ARE FOR CDPGLM ###
+######################################
+
+#' Compute observation-specific marginal CDFs
+#'
+#' Computes observation-specific marginal CDF values
+#' \deqn{
+#' F_{x_j}(y_j)
+#' }
+#' using a CRM-induced mixture of truncated uniform kernels.
+#'
+#' The mixture weights are covariate-dependent and vary across observations
+#' through \eqn{\theta_j}.
+#'
+#' @param y Numeric vector of outcomes with length \eqn{n}.
+#' @param crm.atoms Vector of CRM atoms \eqn{(z_{\ell})}.
+#' @param crm.jumps Vector of CRM jump sizes \eqn{(J_{\ell})}.
+#' @param theta Numeric vector of covariate effects with length \eqn{n}.
+#' @param c0 Half-width of the uniform kernel.
+#' @param min_y Global lower bound of the outcome support.
+#' @param max_y Global upper bound of the outcome support.
+#'
+#' @return
+#' Numeric vector of marginal CDF values
+#' \deqn{
+#' F_{x_j}(y_j).
+#' }
+#'
+#' @keywords internal
 marginal_cdf_unif_kde <- function(y, crm.atoms, crm.jumps, theta, c0,
                          min_y, max_y) {
 
@@ -740,21 +818,31 @@ marginal_cdf_unif_kde <- function(y, crm.atoms, crm.jumps, theta, c0,
 }
 
 
-
-# ------------------------------------------------------------------
-# Compute the log-density of a Gaussian copula with an exchangeable
-# (compound symmetry) correlation structure.
-#
-# The copula density is evaluated at a vector of marginal probabilities
-# u = (u_1, ..., u_n), where u_j = F_x(y_ij).
-#
-# Arguments:
-#   u   : numeric vector of marginal CDF values in (0, 1)
-#   rho : dependence parameter (pairwise correlation)
-#
-# Returns:
-#   logc : scalar value of log c_rho(u)
-# ------------------------------------------------------------------
+#' Compute the log-density of a Gaussian copula
+#'
+#' Computes the log-density of a Gaussian copula with either
+#' exchangeable or AR1 correlation structure.
+#'
+#' The copula density is evaluated at a vector of marginal probabilities
+#' \deqn{
+#' u = (u_1, \ldots, u_n),
+#' }
+#' where
+#' \deqn{
+#' u_j = F_x(y_{ij}).
+#' }
+#'
+#' @param u Numeric vector of marginal CDF values in \eqn{(0,1)}.
+#' @param rho Dependence parameter, interpreted as the pairwise correlation.
+#' @param corr Type of correlation structure. Must be one of \code{ex} or \code{ar1}.
+#'
+#' @return
+#' Scalar value of
+#' \deqn{
+#' \log c_{\rho}(u).
+#' }
+#'
+#' @keywords internal
 log_copula_gaussian <- function(u, rho, corr) {
   n <- length(u)
 
@@ -764,13 +852,6 @@ log_copula_gaussian <- function(u, rho, corr) {
 
   ## Transform to latent Gaussian scale
   z <- qnorm(u)
-
-  # Exchangeable correlation structure
-  # Sigma <- matrix(rho, n, n)
-  # diag(Sigma) <- 1
-
-  # AR(1) correlation
-  # Sigma <- outer(1:n, 1:n, function(i, j) rho^abs(i - j))
 
   if (corr == "ex") {
     Sigma <- matrix(rho, n, n)
@@ -790,38 +871,43 @@ log_copula_gaussian <- function(u, rho, corr) {
   as.numeric(val)
 }
 
-# ------------------------------------------------------------------
-# Compute observation-level Gaussian copula log-likelihood contributions.
-
-#
-# Marginal CDFs F_j = F_{x_j}(y_j) are computed internally via a
-# CRM-induced mixture of truncated uniform kernels using
-# marginal_cdf_unif_kde().
-
-#
-# Observations are coupled within groups using a Gaussian copula with
-# exchangeable correlation parameter rho.
-#
-# For a group i with n_i observations, each observation j in that group
-# receives an equal share of the group copula log-density:
-#
-#   log c_rho(F_{i1}, ..., F_{in_i}) / n_i
-#
-# Arguments:
-#   y           : numeric vector of outcomes
-#   group_index : vector indicating group membership for each y
-#   rho         : copula dependence parameter
-#   crm.atoms   : vector of CRM atoms (z_l)
-#   crm.jumps   : vector of CRM jump sizes (J_l)
-#   theta       : numeric vector of covariate effects (length = length(y))
-#   c0          : half-width of the uniform kernel
-#   min_y       : global lower bound of the outcome support
-#   max_y       : global upper bound of the outcome support
-#
-# Returns:
-#   logcop_obs  : numeric vector of observation-level copula
-#                 log-likelihood contributions (same length as y)
-# ------------------------------------------------------------------
+#' Compute observation-level Gaussian copula log-likelihood contributions
+#'
+#' Marginal CDFs
+#' \deqn{
+#' F_j = F_{x_j}(y_j)
+#' }
+#' are computed internally via a CRM-induced mixture of truncated
+#' uniform kernels using \code{marginal_cdf_unif_kde()}.
+#'
+#' Observations are coupled within groups using a Gaussian copula with
+#' exchangeable correlation parameter \eqn{\rho}.
+#'
+#' For a group \eqn{i} with \eqn{n_i} observations, each observation
+#' \eqn{j} in that group receives an equal share of the group copula
+#' log-density:
+#'
+#' \deqn{
+#' \log c_{\rho}(F_{i1}, \ldots, F_{in_i}) / n_i
+#' }
+#'
+#' @param y Numeric vector of outcomes.
+#' @param group_index Vector indicating group membership for each
+#'   observation in \code{y}.
+#' @param rho Copula dependence parameter.
+#' @param crm.atoms Vector of CRM atoms \eqn{(z_{\ell})}.
+#' @param crm.jumps Vector of CRM jump sizes \eqn{(J_{\ell})}.
+#' @param theta Numeric vector of covariate effects with length equal
+#'   to \code{length(y)}.
+#' @param c0 Half-width of the uniform kernel.
+#' @param min_y Global lower bound of the outcome support.
+#' @param max_y Global upper bound of the outcome support.
+#'
+#' @return
+#' Numeric vector \code{logcop_obs} of observation-level copula
+#' log-likelihood contributions with the same length as \code{y}.
+#'
+#' @keywords internal
 log_copula_contribution_by_obs <- function(y, group_index, rho, corr,
                                            crm.atoms, crm.jumps, theta, c0,
                                            min_y, max_y) {
@@ -851,27 +937,36 @@ log_copula_contribution_by_obs <- function(y, group_index, rho, corr,
   logcop_obs
 }
 
-# ------------------------------------------------------------------
-# Log posterior kernel for the copula dependence parameter rho
-# (simplified interface).
-#
-# This function evaluates the log posterior of rho under the
-# simplified joint distribution
-#
-#   pi(rho | y, lambda, beta) ∝ ∏_i c(y_i, lambda, beta, rho) p(rho),
-#
-# where all marginal likelihood terms are handled elsewhere and the
-# input 'logc_obs' already contains the log copula density contributions
-# evaluated at the current value of rho.
-#
-# Arguments:
-#   rho      : scalar copula dependence parameter, must lie in (0, 1)
-#   logc_obs : numeric vector of log copula contributions whose sum
-#              equals log ∏_i c(y_i, lambda, beta, rho)
-#
-# Returns:
-#   Scalar log posterior value log pi(rho | ·), up to an additive constant
-# ------------------------------------------------------------------
+#' Log posterior kernel for the copula dependence parameter rho
+#'
+#' This function evaluates the log posterior of rho under the
+#' simplified joint distribution
+#'
+#' \deqn{
+#' \pi(\rho \mid y, \lambda, \beta)
+#' \propto
+#' \prod_i c(y_i, \lambda, \beta, \rho)\, p(\rho)
+#' }
+#'
+#' where all marginal likelihood terms are handled elsewhere and the
+#' input \code{logc_obs} already contains the log copula density
+#' contributions evaluated at the current value of \eqn{\rho}.
+#'
+#' @param rho Scalar copula dependence parameter, must lie in \eqn{(0,1)}.
+#' @param logc_obs Numeric vector of log copula contributions whose sum
+#'   equals
+#'   \deqn{
+#'   \log \prod_i c(y_i, \lambda, \beta, \rho).
+#'   }
+#'
+#' @return
+#' Scalar log posterior value
+#' \deqn{
+#' \log \pi(\rho \mid \cdot)
+#' }
+#' up to an additive constant.
+#'
+#' @keywords internal
 log_post_rho <- function(rho, logc_obs, shape1, shape2) {
   
   ## Enforce support of the copula parameter
@@ -886,10 +981,3 @@ log_post_rho <- function(rho, logc_obs, shape1, shape2) {
   ## Log posterior kernel
   loglik + logprior
 }
-
-# calc_exceed <- function(z_atoms, J_jumps, thr_vec) {
-#     Jsum <- sum(J_jumps)
-#     if (!is.finite(Jsum) || Jsum <= 0) return(rep(NA_real_, length(thr_vec)))
-#     w <- J_jumps / Jsum  # temporary normalization for probability calc
-#     vapply(thr_vec, function(t) sum(w[z_atoms >= t]), numeric(1))
-#   }

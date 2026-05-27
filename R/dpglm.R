@@ -44,6 +44,30 @@
 #' \item \code{crm_acceptance} Proportion of accepted proposals for CRM during MCMC.
 #' }
 #'
+#' @examples
+#' \dontrun{
+#' set.seed(123)
+#'
+#' n <- 50
+#' x <- rnorm(n)
+#' y <- 1 + 0.5 * x + rnorm(n, sd = 0.25)
+#'
+#' dat <- data.frame(y = y, x = x)
+#'
+#' fit <- dpglm(
+#'   y ~ x,
+#'   data = dat,
+#'   link = "identity",
+#'   dpglmControl = dpglm.control(
+#'     burnin = 10,
+#'     thin = 1,
+#'     save = 50,
+#'     spt = range(y),
+#'     seed = 123
+#'   )
+#'  )
+#' }
+#' 
 #' @export
 dpglm <- function(formula, data = NULL, link = NULL,
                   dpglmControl = dpglm.control(), thetaControl = theta.control()) {
@@ -175,7 +199,6 @@ dpglm <- function(formula, data = NULL, link = NULL,
     spt          = spt,
     mu0          = mu0,
     init         = init,
-    flag         = "dpglm",
     dpglmControl = dpglmControl,
     thetaControl = thetaControl
   )

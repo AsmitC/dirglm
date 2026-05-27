@@ -1,17 +1,64 @@
-#' Control arguments for the cdpglm algorithm.
+#' Control Arguments for CDPGLM
+#'
+#' Creates a list of control parameters used by \code{\link{cdpglm}} and \code{\linl{cdpglmFit}}.
+#'
+#' @param burnin Number of burn-in MCMC iterations. Defaults to 100.
+#' @param thin Factor by which to thin MCMC iterations. Defaults to 10.
+#' @param save Number of MCMC samples to return. Defaults to 1000.
+#' @param mb Prior mean for beta. Defaults to NULL.
+#' @param Sb Prior scale / diagonal variance entries for beta. Defaults to NULL.
+#' @param M Number of random CRM atoms proposed at each CRM update. Defaults to 50.
+#' @param alpha CRM mass parameter. Defaults to 1.
+#' @param delta Tuning parameter for the \code{u} update. Defaults to 2.
+#' @param c0 Bandwidth parameter used in the latent \code{z} update. Defaults to NULL.
+#' @param gamma Shrinkage parameter for the default prior variance on \code{beta}.
+#' Defaults to 1. Ignored if \code{Sb} is specified.
+#' @param mu0 Mean of the reference distribution. Defaults to \code{NULL}, in which case
+#' \code{mean(y)} is used internally.
+#' @param spt Theoretical support for the response in the DP-GLM. This should be a
+#' length-2 vector giving the lower and upper bounds. Defaults to \code{NULL}, in which
+#' case the support is inferred internally from the data as \code{c(min(y)-eps, max(y)+eps)}.
+#' @param eps Padding used when constructing default support bounds. Defaults to 1e-6.
+#' @param rhoStart Numeric. Starting value for the copula dependence parameter
+#' \eqn{\rho}. Defaults to \code{0.5}.
+#' @param corr Character string specifying copula correlation structure.
+#' Options are \code{"ex"} for exchangeable correlation and \code{"ar1"} for AR(1) correlation.
+#' @param rho_proposal_sd Numeric. Proposal standard deviation for the random-walk
+#' update of \eqn{\rho} on the logit scale. Defaults to \code{0.1}.
+#' @param rho_prior_shape Numeric vector of length two. Parameters for the
+#' Beta prior on \eqn{\rho}. Defaults to \code{c(8, 2)}.
+#' @param betaStart Initial value for \code{beta}. Defaults to NULL.
+#' @param varbetaStart Initial value for the proposal covariance of \code{beta}. Defaults to NULL.
+#' @param thetaStart Initial value for \code{theta}. Defaults to NULL.
+#' @param crmStart Initial value for the CRM state, given as a list with components
+#' \code{z.tld} and \code{J.tld}. Defaults to NULL.
+#' @param seed Random seed. Defaults to NULL.
+#' @param robust Provides numerical stability. Defaults to \code{TRUE}. See details for more. 
+#'
+#' @return An object of class \code{"cdpglmControl"}; a list of control
+#' parameters passed to the internal CDPGLM fitting routine.
+#'
+#' @examples
+#' ctrl <- cdpglm.control(
+#'   burnin = 100,
+#'   thin = 5,
+#'   save = 500,
+#'   spt = c(0, 1),
+#'   corr = "ex",
+#'   seed = 123
+#' )
 #'
 #' @export
 cdpglm.control <- function(burnin = 100, thin = 10, save = 1000,
                            mb = NULL, Sb = NULL,
                            M = 50, alpha = 1, delta = 2, c0 = NULL,
                            gamma = 1, mu0 = NULL, spt = NULL, eps = 1e-6,
-                           robust = TRUE,
                            rhoStart = 0.5, corr = c("ex", "ar1"),
                            rho_proposal_sd = 0.1,
                            rho_prior_shape = c(8, 2),
                            betaStart = NULL, varbetaStart = NULL,
                            thetaStart = NULL, crmStart = NULL,
-                           seed = NULL) {
+                           seed = NULL, robust = NULL) {
   if (burnin < 0 || floor(burnin) != burnin) {
     stop("Number of burn-in samples must be an integer >= 0.", call. = FALSE)
   }
@@ -38,7 +85,6 @@ cdpglm.control <- function(burnin = 100, thin = 10, save = 1000,
     mu0 = mu0,
     spt = spt,
     eps = eps,
-    robust = robust,
     rhoStart = rhoStart,
     corr = corr,
     rho_proposal_sd = rho_proposal_sd,
@@ -47,14 +93,38 @@ cdpglm.control <- function(burnin = 100, thin = 10, save = 1000,
     varbetaStart = varbetaStart,
     thetaStart = thetaStart,
     crmStart = crmStart,
-    seed = seed
+    seed = seed,
+    robust = robust
   )
 
   class(ctrl) <- "cdpglmControl"
   ctrl
 }
 
-#' Main MCMC function for cdpglm
+#' Main MCMC Fitting Function for CDPGLM
+#'
+#' Performs MCMC to fit the CDPGLM model.
+#'
+#' @param formula Model formula supplied to \code{\link{cdpglm}}.
+#' @param data Data frame containing the variables appearing in \code{formula}.
+#' @param X Numeric design matrix.
+#' @param y Numeric response vector.
+#' @param group_index Vector identifying the dependence group for each observation.
+#' @param link Link object containing \code{linkfun}, \code{linkinv}, and \code{mu.eta}.
+#' @param spt Numeric vector of length two giving the lower and upper bounds
+#' of the response support.
+#' @param mu0 Numeric target mean used to identify the reference distribution.
+#' @param init List of initial values for the MCMC algorithm.
+#' @param cdpglmControl Object of class \code{"cdpglmControl"} containing MCMC,
+#' tuning, and copula-control parameters.
+#' @param thetaControl Object of class \code{"thetaControl"} containing control
+#' arguments for the theta update procedure.
+#'
+#' @return
+#' A list containing posterior samples, acceptance rates, prior settings,
+#' support information, copula settings, and model specification information
+#' used by \code{\link{cdpglm}}.
+#'
 #' @keywords internal
 cdpglmFit <- function(formula, data, X, y, group_index,
                       link,

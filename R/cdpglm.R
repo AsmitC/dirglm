@@ -46,16 +46,31 @@
 #'
 #' @examples
 #' \dontrun{
+#' set.seed(123)
+#'
+#' n_group <- 10
+#' n_per_group <- 5
+#' n <- n_group * n_per_group
+#'
+#' id <- rep(seq_len(n_group), each = n_per_group)
+#' x <- rnorm(n)
+#' group_effect <- rep(rnorm(n_group, sd = 0.3), each = n_per_group)
+#' y <- 1 + 0.5 * x + group_effect + rnorm(n, sd = 0.2)
+#'
+#' dat <- data.frame(y = y, x = x, id = id)
 #' fit <- cdpglm(
-#'   y ~ x1 + x2,
+#'   y ~ x,
 #'   data = dat,
 #'   group_index = dat$id,
+#'   link = "identity",
 #'   cdpglmControl = cdpglm.control(
-#'     spt = c(0, 1),
-#'     save = 500,
-#'     thin = 5
+#'     spt = range(y),
+#'     save = 50,
+#'     thin = 1,
+#'     burnin = 10,
+#'     seed = 123
 #'   )
-#' )
+#'  )
 #' }
 #'
 #' @export

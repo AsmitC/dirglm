@@ -33,15 +33,17 @@
 #' to have the desired mean \text{mu0}. If \code{robust = FALSE}, these weights can
 #' vary more in magnitude and lead to downstream numerical instability.
 #' 
-#' @return An object of class \code{"dpglmControl"}, which is a list of control
+#' @return An object of class \code{"dpglmControl"}; a list of control
 #' parameters for the DPGLM fitting function.
 #' 
 #' @examples
+#' \donrun{
 #' ctrl <- dpglm.control(burnin = 100,
 #'                       thin = 2,
 #'                       save = 500,
 #'                       spt = c(0, 1),
 #'                       seed = 123)
+#' }
 #'
 #' @export
 dpglm.control <- function(burnin = 100, thin = 10, save = 1000,
@@ -98,12 +100,33 @@ dpglm.control <- function(burnin = 100, thin = 10, save = 1000,
 }
 
 
-#' Main MCMC function
-#' This function is called by the main \code{dirglm} function.
+#' Main MCMC Fitting Function for DPGLM
+#'
+#' Performs MCMC to fit the DPGLM model.
+#'
+#' @param formula Model formula supplied to \code{\link{dpglm}}.
+#' @param data Data frame containing the variables appearing in \code{formula}.
+#' @param X Numeric design matrix.
+#' @param y Numeric response vector.
+#' @param link Link object containing \code{linkfun}, \code{linkinv}, and \code{mu.eta}.
+#' @param spt Numeric vector of length two giving the lower and upper bounds
+#' of the response support.
+#' @param mu0 Numeric target mean used to identify the reference distribution.
+#' @param init List of initial values for the MCMC algorithm.
+#' @param dpglmControl Object of class \code{"dpglmControl"} containing MCMC
+#' and tuning parameters.
+#' @param thetaControl Object of class \code{"thetaControl"} containing control
+#' arguments for the theta update procedure.
+#'
+#' @return
+#' A list containing posterior samples, acceptance rates, prior settings,
+#' support information, and model specification information used by
+#' \code{\link{dpglm}}.
+#'
 #' @keywords internal
 dpglmFit <- function(formula, data, X, y,        # Data
                      link,                       # Link
-                     spt, mu0, init, flag,       # Model Specs
+                     spt, mu0, init,             # Model Specs
                      dpglmControl, thetaControl) # Controls
 {
   # Extract dpglmControl parameters
@@ -135,7 +158,8 @@ dpglmFit <- function(formula, data, X, y,        # Data
 
   if (is.null(copula) || !is.list(copula)) copula <- list()
   
-  if (flag == "dpglm") h <- h_ <- hstar <- 0
+  # Default h for the DPGLM model
+  h <- h_ <- hstar <- 0
 
   if (!is.null(seed)) set.seed(seed)
   
@@ -148,10 +172,6 @@ dpglmFit <- function(formula, data, X, y,        # Data
   beta_samples <- matrix(NA, nrow = iter, ncol = p)
   theta_samples <- matrix(NA, nrow = iter, ncol = n)
   u_samples <- z_samples <- matrix(NA, nrow = iter, ncol = n)
-  if (flag == "copula") {
-    rho_samples <- numeric(iter)
-    rho_samples[1] <- rho <- 0.5
-  }
   crm_samples   <- list()
   lnlik_samples <- numeric(iter)
 
@@ -279,30 +299,9 @@ dpglmFit <- function(formula, data, X, y,        # Data
             # Compute log proposal values
             pr_logprop_beta <- dmvnorm(x = beta_, mean = beta_mode, sigma = beta_cov, log = TRUE)
             cr_logprop_beta <- dmvnorm(x = beta, mean = beta_mode_, sigma = beta_cov_, log = TRUE)
-            
-            # Compute log-posterior values
-            if (flag == "copula") h <- log_copula_contribution_by_obs(y, group_index, rho,
-                                                                      crm.atoms = z.tld, crm.jumps = J.tld, theta, c0,
-                                                                      min_y, max_y)
-            
             cr_logpost_beta <- logpost_beta(beta = beta, linkinv = linkinv, z = z, X = X, atoms = z.tld, 
                                             jumps  = J.tld, mu_beta = mb,
                                             sigma_beta = Sb, h = h)
-            
-            if (flag == "copula") {
-              theta_ <- gldrm:::getTheta(spt = z.tld,
-                                       f0  = J.tld,
-                                       mu  = plogis(X %*% beta_),
-                                       sampprobs  = NULL,
-                                       ySptIndex  = NULL,
-                                       thetaStart = theta
-                                      )$theta
-            
-              h_ <- log_copula_contribution_by_obs(y, group_index, rho,
-                                                   crm.atoms = z.tld, crm.jumps = J.tld, theta_, c0,
-                                                   min_y, max_y)
-            }
-            
             pr_logpost_beta <- logpost_beta(beta = beta_, linkinv = linkinv, z = z, X = X, atoms = z.tld, 
                                             jumps = J.tld, mu_beta = mb,
                                             sigma_beta = Sb, h = h_)
@@ -338,10 +337,6 @@ dpglmFit <- function(formula, data, X, y,        # Data
       warning("Capped some values of Theta at 50. Consider increasing M.")
     }
 
-    # h update ------------------------------------
-    if (flag == "copula") h <- log_copula_contribution_by_obs(y, group_index, rho,
-                                                              crm.atoms = z.tld, crm.jumps = J.tld, theta, c0,
-                                                              min_y, max_y)
     # u update ----------------------------------------
     u <- sampler_u(u, zstar, nstar, theta, alpha, delta, min_y, max_y, eps, h)
   
@@ -370,10 +365,6 @@ dpglmFit <- function(formula, data, X, y,        # Data
         theta_star[idx] <- 50
         warning("Capped some values of Theta at 50. Consider increasing M.")
       }
-
-      if (flag == "copula") hstar <- log_copula_contribution_by_obs(y, group_index, rho,
-                                                                    crm.atoms = z.tld_star, crm.jumps = J.tld_star, theta = theta_star, c0,
-                                                                    min_y, max_y)
       
       crm_star_2 <- crm_sampler(M, u, zstar, nstar, theta_star, alpha, min_y, max_y, eps, h)
       z.tld_star_2 <- c(crm_star_2$RL, crm_star_2$zstar)
@@ -433,25 +424,6 @@ dpglmFit <- function(formula, data, X, y,        # Data
       theta0[idx] <- 50
       warning("Capped some values of Theta at 50. Consider increasing M.")
     }
-
-    # (copula) rho update ----------------------------------------------------------------
-    if (flag == "copula"){
-      rho_prop <- plogis(qlogis(rho) + rnorm(1, 0, rho_proposal_sd))
-      # log posterior
-      logpost_current <- log_post_rho(rho, h)
-      h_ = log_copula_contribution_by_obs(y, group_index, rho_prop,
-                                          crm.atoms = z.tld, crm.jumps = J.tld, theta, c0,
-                                          min_y, max_y)
-      logpost_prop <- log_post_rho(rho_prop, h_)
-      
-      # Jacobian correction
-      log_jacobian <- log(rho_prop * (1 - rho_prop)) - log(rho * (1 - rho))
-      log_r <- logpost_prop - logpost_current + log_jacobian
-      
-      if (log(runif(1)) < log_r) {
-        rho = rho_prop
-      } 
-    }
     
     temp <- exp(theta0 * z.tld - max(theta0 * z.tld))
     Jtilt <- temp * J.tld
@@ -472,7 +444,6 @@ dpglmFit <- function(formula, data, X, y,        # Data
     beta_samples[itr,] <- beta
     theta_samples[itr, ] <- theta
     crm_samples[[itr]] <- list(z.tld = z.tld, J.tld = J.tld)
-    if (flag == "copula") rho_samples[itr] <- rho
     lnlik_samples[itr] <- lnlik
   }
   
