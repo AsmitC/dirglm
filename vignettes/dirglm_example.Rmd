@@ -142,7 +142,7 @@ sim_dat_4 <- function(n, p, seed=100) {
 spt <- 0:5
 mu0 <- 1
 data <- sim_dat_1(n = 500, p = 2)
-dir_glm.fit <- dirglm(y ~ X2, data=data, type="dirglm", dirglmControl=dirglm.control(mu0=mu0, spt=spt, rho=1))
+dir_glm.fit <- dirglm(y ~ X2, data=data, dirglmControl=dirglm.control(mu0=mu0, spt=spt, rho=1))
 beta_samples <- dir_glm.fit$samples$beta
 f0_samples <- dir_glm.fit$samples$f0
 colMeans(beta_samples)        # true beta is c(-0.7, 0.2)
@@ -260,8 +260,8 @@ sim_data <- function(n, true_beta) {
 
 # Run simulation
 set.seed(832)
-iter <- 1000
-dat <- sim_data(1000, truth1$beta)
+iter <- 500
+dat <- sim_data(100, truth1$beta)
 truth1$f0[, 2] <- truth1$f0[, 2] / sum(truth1$f0[, 2])
 fit <- dpglm(Y ~ X2, data = data.frame(Y = dat$Y, X2 = dat$X2), link = "logit",
              dpglmControl = dpglm.control(save = iter, thin = 1,
@@ -322,7 +322,7 @@ summ_num <- function(x, name = deparse(substitute(x))) {
 }
 
 # Beta
-new_beta_mat <- fit$samples$beta[101:1100,]
+new_beta_mat <- fit$samples$beta
 new_beta_mean <- colMeans(new_beta_mat, na.rm = TRUE)
 new_beta_sd   <- apply(new_beta_mat, 2, sd, na.rm = TRUE)
 
@@ -333,7 +333,7 @@ cat("crm_acceptance  =", fit$crm_acceptance, "\n")
 # CRM
 new_zlist <- fit$samples$crm$z.tld
 new_Jlist <- fit$samples$crm$J.tld
-new_crm_df <- crm_metrics(new_zlist, new_Jlist)[101:1100,]
+new_crm_df <- crm_metrics(new_zlist, new_Jlist)
 
 cat("\n--- CRM summary---\n")
 print(rbind(
@@ -347,4 +347,340 @@ print(rbind(
 # End behavior
 cat("\n--- Last 10 CRM iters ---\n")
 print(tail(new_crm_df, 5))
+```
+
+# CDPGLM
+
+```{r}
+make_truth_grid <- function() {
+  truth <- readRDS("../f0_kde_unif_0_1.rds")
+  spt <- as.numeric(truth$spt)
+  f0 <- as.numeric(truth$f0)
+  dx <- diff(spt)[1]
+  f0 <- f0 / sum(f0 * dx)
+
+  list(
+    spt = spt,
+    f0 = f0,
+    dx = dx
+  )
+}
+
+make_longitudinal_design <- function(n_subjects, n_visits) {
+  visit_values <- if (n_visits == 1L) {
+    0
+  } else {
+    seq(-0.5, 0.5, length.out = n_visits)
+  }
+
+  subject <- rep(seq_len(n_subjects), each = n_visits)
+  biomarker_subject <- 2L * rbinom(n_subjects, size = 1L, prob = 0.5) - 1L
+  biomarker <- rep(biomarker_subject, each = n_visits)
+  visit <- rep(visit_values, times = n_subjects)
+
+  data.frame(
+    subject = subject,
+    biomarker = biomarker,
+    visit = visit,
+    row.names = NULL
+  )
+}
+
+simulate_et_data <- function(n_subjects, n_visits, true_beta, rho, truth_grid, seed = 832) {
+  set.seed(seed)
+
+  design <- make_longitudinal_design(n_subjects = n_subjects, n_visits = n_visits)
+  X <- model.matrix(~ biomarker * visit, data = design)
+  mu <- plogis(drop(X %*% true_beta))
+
+  theta <- gldrm:::getTheta(
+    spt = truth_grid$spt,
+    f0 = truth_grid$f0,
+    mu = mu,
+    thetaStart = NULL,
+    sampprobs = NULL,
+    ySptIndex = NULL
+  )$theta
+
+  exp_matrix <- exp(outer(theta, truth_grid$spt, "*"))
+  btheta <- log(drop(exp_matrix %*% truth_grid$f0) * truth_grid$dx)
+
+  mass_matrix <- t(vapply(seq_len(nrow(X)), function(i) {
+    weights <- exp(theta[i] * truth_grid$spt - btheta[i]) * truth_grid$f0 * truth_grid$dx
+    weights / sum(weights)
+  }, numeric(length(truth_grid$spt))))
+
+  # Exchangeable copula
+  Sigma <- matrix(rho, nrow = n_visits, ncol = n_visits)
+  diag(Sigma) <- 1
+
+  y <- numeric(nrow(design))
+  for (subject_id in seq_len(n_subjects)) {
+    idx <- which(design$subject == subject_id)
+    u <- pnorm(drop(mvtnorm::rmvnorm(1, sigma = Sigma)))
+
+    for (j in seq_along(idx)) {
+      obs <- idx[j]
+      cdf_vals <- cumsum(mass_matrix[obs, ])
+      hit <- which(cdf_vals >= u[j])[1]
+      if (is.na(hit)) {
+        hit <- length(truth_grid$spt)
+      }
+      y[obs] <- truth_grid$spt[hit]
+    }
+  }
+
+  transform(
+    design,
+    y = pmin(pmax(y, 1e-6), 1 - 1e-6),
+    mu_true = mu,
+    theta_true = theta
+  )
+}
+```
+
+Fit cdpglm
+```{r}
+# Fit
+devtools::load_all()
+library(gldrm)
+library(mvtnorm)
+
+truth_grid <- make_truth_grid()
+
+set.seed(832)
+sim_dat <- simulate_et_data(
+  n_subjects = 20,
+  n_visits = 5,
+  true_beta = c(0.6, -1.0, -0.8, 0.8),
+  rho = 0.6,
+  truth_grid = truth_grid,
+  seed = 832
+)
+
+fit <- cdpglm(
+  y ~ biomarker * visit,
+  data = sim_dat,
+  group_index = sim_dat$subject,
+  link = "logit",
+  cdpglmControl = cdpglm.control(
+    save = 1000,
+    thin = 1,
+    burnin = 100,
+    spt = c(0, 1),
+    seed = 832,
+    corr = "ex"
+  )
+)
+```
+
+Checks
+```{r}
+## --------------------------
+## CDPGLM diagnostics
+## --------------------------
+
+summ_num <- function(x, name) {
+  data.frame(
+    name = name,
+    n = length(x),
+    min = min(x, na.rm = TRUE),
+    q05 = quantile(x, 0.05, na.rm = TRUE),
+    med = median(x, na.rm = TRUE),
+    mean = mean(x, na.rm = TRUE),
+    q95 = quantile(x, 0.95, na.rm = TRUE),
+    max = max(x, na.rm = TRUE),
+    row.names = NULL
+  )
+}
+
+crm_metrics <- function(zlist, Jlist) {
+  out <- lapply(seq_along(zlist), function(i) {
+    z <- zlist[[i]]
+    J <- Jlist[[i]]
+    Jsum <- sum(J)
+    Jnorm <- J / Jsum
+
+    data.frame(
+      iter = i,
+      n_atoms = length(z),
+      z_min = min(z),
+      z_max = max(z),
+      J_sum = Jsum,
+      J_max = max(J),
+      J_max_share = max(Jnorm),
+      ess = 1 / sum(Jnorm^2)
+    )
+  })
+
+  do.call(rbind, out)
+}
+
+calc_exceed <- function(z, J, thresholds = c(0.8, 0.9, 0.95)) {
+  J <- J / sum(J)
+  sapply(thresholds, function(t) sum(J[z >= t]))
+}
+
+calc_moments <- function(z, J) {
+  J <- J / sum(J)
+  m <- sum(z * J)
+  v <- sum((z - m)^2 * J)
+  c(mean = m, var = v, sd = sqrt(v))
+}
+
+## Optional burn-in removal for summaries
+burn <- 0
+keep <- seq.int(burn + 1, nrow(fit$samples$beta))
+
+## --------------------------
+## Beta summary
+## --------------------------
+beta_samps <- fit$samples$beta[keep, , drop = FALSE]
+
+beta_summary <- data.frame(
+  term = colnames(model.matrix(~ biomarker * visit, data = sim_dat)),
+  mean = colMeans(beta_samps),
+  sd = apply(beta_samps, 2, sd),
+  q05 = apply(beta_samps, 2, quantile, 0.05),
+  q50 = apply(beta_samps, 2, quantile, 0.50),
+  q95 = apply(beta_samps, 2, quantile, 0.95)
+)
+
+cat("\n--- Beta posterior summary ---\n")
+print(beta_summary)
+
+## If true beta exists
+true_beta <- c(0.6, -1.0, -0.8, 0.8)
+cat("\n--- Beta comparison ---\n")
+print(data.frame(
+  term = beta_summary$term,
+  truth = true_beta,
+  post_mean = beta_summary$mean,
+  bias = beta_summary$mean - true_beta
+))
+
+## --------------------------
+## Rho summary
+## --------------------------
+rho_samps <- fit$samples$rho[keep]
+
+rho_summary <- data.frame(
+  truth = 0.6,
+  mean = mean(rho_samps),
+  sd = sd(rho_samps),
+  q05 = quantile(rho_samps, 0.05),
+  q50 = quantile(rho_samps, 0.50),
+  q95 = quantile(rho_samps, 0.95)
+)
+
+cat("\n--- Rho posterior summary ---\n")
+print(rho_summary)
+
+## --------------------------
+## CRM summaries
+## --------------------------
+crm <- fit$samples$crm
+z_list <- crm$z.tld[keep]
+J_list <- crm$J.tld[keep]
+
+crm_df <- crm_metrics(z_list, J_list)
+
+cat("\n--- CRM summary ---\n")
+print(rbind(
+  summ_num(crm_df$n_atoms, "n_atoms"),
+  summ_num(crm_df$ess, "ess"),
+  summ_num(crm_df$J_max_share, "J_max_share"),
+  summ_num(crm_df$z_min, "z_min"),
+  summ_num(crm_df$z_max, "z_max"),
+  summ_num(crm_df$J_sum, "J_sum")
+))
+
+cat("\n--- Last 10 CRM iterations ---\n")
+print(tail(crm_df, 10))
+
+## --------------------------
+## CRM truth comparison
+## --------------------------
+truth_z <- truth_grid$spt
+truth_J <- truth_grid$f0 * truth_grid$dx
+truth_J <- truth_J / sum(truth_J)
+
+thresholds <- c(0.8, 0.9, 0.95)
+
+truth_exceed <- calc_exceed(truth_z, truth_J, thresholds)
+
+post_exceed <- t(mapply(
+  calc_exceed,
+  z = z_list,
+  J = J_list,
+  MoreArgs = list(thresholds = thresholds)
+))
+
+exceed_summary <- data.frame(
+  threshold = thresholds,
+  truth = as.numeric(truth_exceed),
+  post_mean = colMeans(post_exceed),
+  post_sd = apply(post_exceed, 2, sd)
+)
+
+cat("\n--- Exceedance probabilities ---\n")
+print(exceed_summary)
+
+truth_mom <- calc_moments(truth_z, truth_J)
+
+post_mom <- t(mapply(calc_moments, z = z_list, J = J_list))
+
+moment_summary <- data.frame(
+  functional = names(truth_mom),
+  truth = as.numeric(truth_mom),
+  post_mean = colMeans(post_mom),
+  post_sd = apply(post_mom, 2, sd)
+)
+
+cat("\n--- CRM moment comparison ---\n")
+print(moment_summary)
+
+## --------------------------
+## Grid-level CRM distance
+## --------------------------
+grid <- truth_z
+breaks <- c(-Inf, (head(grid, -1) + tail(grid, -1)) / 2, Inf)
+
+crm_to_grid <- function(z, J, breaks) {
+  J <- J / sum(J)
+  bin <- cut(z, breaks = breaks, labels = FALSE, include.lowest = TRUE)
+
+  out <- numeric(length(breaks) - 1)
+  rs <- rowsum(J, bin, reorder = FALSE)
+  out[as.integer(rownames(rs))] <- rs[, 1]
+  out
+}
+
+post_grid_mass <- t(mapply(
+  crm_to_grid,
+  z = z_list,
+  J = J_list,
+  MoreArgs = list(breaks = breaks)
+))
+
+post_grid_mean <- colMeans(post_grid_mass)
+
+crm_distance <- data.frame(
+  L1 = sum(abs(post_grid_mean - truth_J)),
+  L2 = sqrt(sum((post_grid_mean - truth_J)^2)),
+  Linf = max(abs(post_grid_mean - truth_J))
+)
+
+cat("\n--- CRM grid distance from truth ---\n")
+print(crm_distance)
+
+## --------------------------
+## Acceptance rates
+## --------------------------
+cat("\n--- Acceptance rates ---\n")
+print(data.frame(
+  beta = fit$p_acc_beta,
+  crm = fit$p_acc_crm,
+  rho = fit$p_acc_rho
+))
 ```

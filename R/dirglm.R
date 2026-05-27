@@ -4,7 +4,7 @@
 #' @import mvtnorm
 #' @import gldrm
 #'
-#' @param formula An object of class "formula".
+#' @param formula An object of class  \code{\link[stats]{formula}}.
 #' @param data An optional data frame containing the variables in the model.
 #' @param link Link function. Defaults to log.
 #' Can be a character string to be passed to the
@@ -23,7 +23,9 @@
 #' \code{theta.control} function.
 #' See \code{theta.control} documentation for details.
 #'
-#' @return An S3 object of class "dirglm". See details.
+#' @return List of class "dirglm" containing information including
+#' posterior samples, Metropolis-Hastings acceptance rates, and model specification See
+#' details for more information.
 #'
 #' @details The arguments \code{linkfun}, \code{linkinv}, and \code{mu.eta}
 #' mirror the "link-glm" class. Objects of this class can be created with the
@@ -45,12 +47,15 @@
 #' Otherwise, it will be the list of three functions passed to the \code{link} argument.
 #' \item \code{spt} Support, \eqn{\{s_j, \ j = 1, 2, ..., l\}}, of response variable \code{y}.
 #' \item \code{mu0} Mean of the reference distribution \code{f0}.
-#' \item \code{iter} The total number of MCMC iterations.
-#' \item \code{p_acc_beta} Proportion of accepted proposals for beta during MCMC.
-#' \item \code{p_acc_f0} Proportion of accepted proposals for f0 during MCMC.
+#' \item \code{burnin} The number of burn-in MCMC iterations.
+#' \item \code{thin} Thinning parameter used for MCMC
+#' \item \code{save} The number of saved MCMC iterations.
+#' \item \code{beta_acceptance} Proportion of accepted proposals for beta during MCMC.
+#' \item \code{f0_acceptance} Proportion of accepted proposals for f0 during MCMC.
 #' }
 #'
 #' @examples
+#' \dontrun{
 #' set.seed(832)
 #' x <- rep(0:2, each=3)
 #' lam <- exp(0.3+0.6*x)
@@ -59,6 +64,7 @@
 #' fit.test <- dirglm(y ~ x, data=dat,
 #'                    dirglmControl=dirglm.control(burnin=10,thin=1,save=10))
 #' summary(fit.test)
+#' }
 #'
 #' @export
 dirglm <- function(formula, data = NULL, link = "log",
@@ -177,7 +183,6 @@ dirglm <- function(formula, data = NULL, link = "log",
     Sb               = fit$Sb,
     dir_pr_parm      = fit$dir_pr_parm,
     formula          = formula,
-    type             = "dirglm",
     data             = data.frame(mf),
     link             = link,
     spt              = fit$spt,

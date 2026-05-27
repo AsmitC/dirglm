@@ -32,6 +32,16 @@
 #' @details Setting \code{robust = TRUE} will tilt the CRM weights at each MCMC iteration
 #' to have the desired mean \text{mu0}. If \code{robust = FALSE}, these weights can
 #' vary more in magnitude and lead to downstream numerical instability.
+#' 
+#' @return An object of class \code{"dpglmControl"}, which is a list of control
+#' parameters for the DPGLM fitting function.
+#' 
+#' @examples
+#' ctrl <- dpglm.control(burnin = 100,
+#'                       thin = 2,
+#'                       save = 500,
+#'                       spt = c(0, 1),
+#'                       seed = 123)
 #'
 #' @export
 dpglm.control <- function(burnin = 100, thin = 10, save = 1000,
@@ -134,7 +144,6 @@ dpglmFit <- function(formula, data, X, y,        # Data
   # Extract link
   linkfun <- link$linkfun
   linkinv <- link$linkinv
-  mu.eta  <- link$mu.eta
 
   beta_samples <- matrix(NA, nrow = iter, ncol = p)
   theta_samples <- matrix(NA, nrow = iter, ncol = n)
@@ -158,7 +167,7 @@ dpglmFit <- function(formula, data, X, y,        # Data
   
   RL <- z_tld[ord]
   RJ <- J_tld[ord]
-  theta_samples[1, ] <- theta <- init$theta
+  theta_samples[1, ] <- theta <- theta_ref <- init$theta
   z_samples[1, ] <- z <- z_sampler_unifK(y, c0, z.tld, J.tld, theta, min_y, max_y, eps)
 
   btheta <- b_theta(theta, z.tld, J.tld)
@@ -188,11 +197,11 @@ dpglmFit <- function(formula, data, X, y,        # Data
     warning("Capped some values of Theta at 50. Consider increasing M.")
   }
 
-  # EBP STUFF
   temp <- exp(theta0 * z.tld - max(theta0 * z.tld))
   Jtilt <- temp * J.tld
   W <- sum(Jtilt)
   Jtld_0 <- Jtilt / W
+
   if (robust) {
     J.tld <- Jtilt
     J.tld_ll <- Jtld_0
@@ -213,7 +222,6 @@ dpglmFit <- function(formula, data, X, y,        # Data
   }
   else if (length(mb) != p) stop("length(mb) must match the number of covariates.")
 
-  Sbdiag <- TRUE
   if (is.null(Sb)) {
     mprime  <- spt[1] + (spt[2] - spt[1]) * 0.25
     Mprime  <- spt[1] + (spt[2] - spt[1]) * 0.75
@@ -228,6 +236,7 @@ dpglmFit <- function(formula, data, X, y,        # Data
   # Start MCMC loop
   for(itr in 2:iter){
     if(itr%%50==0) cat("\nStarting iteration:", itr)
+    
     # Optimization to find the mode
     result <- tryCatch({
       optim(par = beta, fn = logpost_beta, linkinv = linkinv, z = z, X = X,
@@ -257,7 +266,7 @@ dpglmFit <- function(formula, data, X, y,        # Data
         if (all(eigen(beta_cov_, symmetric = TRUE, only.values = TRUE)$values >= 
                 -sqrt(.Machine$double.eps))) {
           
-          # Force positive defineness if needed
+          # Force positive definiteness if needed
           beta_cov_ <- as.matrix(Matrix::nearPD(beta_cov_)$mat)
           
           # Sample new beta from proposal distribution
@@ -337,11 +346,11 @@ dpglmFit <- function(formula, data, X, y,        # Data
     u <- sampler_u(u, zstar, nstar, theta, alpha, delta, min_y, max_y, eps, h)
   
     # CRM update --------------------------------------
-    crm_star <- crm_sampler(M, u, zstar, nstar, theta, alpha, min_y, max_y, eps, h, itr)
+    crm_star <- crm_sampler(M, u, zstar, nstar, theta, alpha, min_y, max_y, eps, h)
     z.tld_star <- c(crm_star$RL, crm_star$zstar)
     J.tld_star <- c(crm_star$RJ, crm_star$Jstar)
 
-    crm_2 <- crm_sampler(M, u, zstar, nstar, theta, alpha, min_y, max_y, eps, h, itr)
+    crm_2 <- crm_sampler(M, u, zstar, nstar, theta, alpha, min_y, max_y, eps, h)
     z.tld_2 <- c(crm_2$RL, crm_2$zstar)
     J.tld_2 <- c(crm_2$RJ, crm_2$Jstar)
     
@@ -366,7 +375,7 @@ dpglmFit <- function(formula, data, X, y,        # Data
                                                                     crm.atoms = z.tld_star, crm.jumps = J.tld_star, theta = theta_star, c0,
                                                                     min_y, max_y)
       
-      crm_star_2 <- crm_sampler(M, u, zstar, nstar, theta_star, alpha, min_y, max_y, eps, h, itr)
+      crm_star_2 <- crm_sampler(M, u, zstar, nstar, theta_star, alpha, min_y, max_y, eps, h)
       z.tld_star_2 <- c(crm_star_2$RL, crm_star_2$zstar)
       J.tld_star_2 <- c(crm_star_2$RJ, crm_star_2$Jstar)
 
@@ -375,9 +384,9 @@ dpglmFit <- function(formula, data, X, y,        # Data
       b_thstar_crm     <- b_theta(theta_star, z.tld,      J.tld)
       b_th_crmstar     <- b_theta(theta,      z.tld_star, J.tld_star)
 
-      b_th_crmstar2    <- b_theta(theta,      z.tld_star_2, J.tld_star_2)
+      b_th_crmstar2    <- b_theta(theta_ref,      z.tld_star_2, J.tld_star_2)
       b_thstar_crmstar2 <- b_theta(theta_star, z.tld_star_2, J.tld_star_2)
-      b_th_crm2        <- b_theta(theta,      z.tld_2,      J.tld_2)
+      b_th_crm2        <- b_theta(theta_ref,      z.tld_2,      J.tld_2)
       b_thstar_crm2    <- b_theta(theta_star, z.tld_2,      J.tld_2)
 
       log_r <- sum(

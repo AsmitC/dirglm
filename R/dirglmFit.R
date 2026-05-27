@@ -31,6 +31,13 @@
 #' @param seed Random seed. Defaults to NULL.
 #'
 #' @return Object of S3 class "dirglmControl"
+#' 
+#' @examples
+#' ctrl <- dirglm.control(burnin = 100,
+#'                        thin = 2,
+#'                        save = 500,
+#'                        spt = 0:1,
+#'                        seed = 123)
 #'
 #' @export
 dirglm.control <- function(burnin=100, thin=10, save=1000, rho=0.1,

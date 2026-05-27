@@ -592,138 +592,91 @@ b_theta <- function(theta, spt, f0) { # Add arg H, type?
   return(as.vector(result))  # Ensure the output is a vector
 }
 
-# --------------------------------------------------------------------------- #
-#                               CRM update                                   #
-# --------------------------------------------------------------------------- #
-
-crm_sampler <- function(M, u, zstar, nstar, theta, alpha, min_y, max_y, eps, h, itr){
+crm_sampler <- function(M, u, zstar, nstar, theta, alpha,
+                        min_y, max_y, eps, h = 0) {
   N <- 3001
   R <- 3001
   s <- -log(seq(exp(-eps), exp(-5e-4), length.out = N))
 
   tht <- theta
-  
-  # Sorted, ascending order, needed in RL
-  #z <- seq(eps, 1 - eps, length.out = R)
-  z <- seq(min_y + eps, max_y - eps, length.out = R)
-  
-  # Assume u is a vector and z is the grid where you want to compute psi_z.
-  # Here we compute psi_z for each grid point z[j] by summing over u.
-  
-  # Compute a matrix of log-terms:
-  log_terms <- outer(log(u), z, function(lu, z_val) lu + tht * z_val)
 
-  # Adding H, something like
-  #log_terms <- outer(log(u), z, function(lu, zval, H, ...) lu + tht * z_val + H(...))
-  
-  # Now compute psi_z using the log-sum-exp trick along the u dimension (rows):
+  if (length(h) == 1L) {
+    h <- rep(h, length(u))
+  }
+
+  z <- seq(min_y + eps, max_y - eps, length.out = R)
+
+  # log_terms[i, j] = log(u_i) + h_i + theta_i * z_j
+  log_terms <- sweep(tht %o% z, 1, log(u) + h, "+")
+
   psi_z <- apply(log_terms, 2, function(log_vec) {
     max_val <- max(log_vec)
     exp(max_val + log(sum(exp(log_vec - max_val))))
   })
-  
-  # if (itr %% 250 == 0) {
-  # cat("  psi_z range:", paste(round(range(psi_z), 3), collapse=","), "\n")
-  # }
-  
-  # Assume:
-  #   psi_z: vector of length R computed as before over the z grid
-  #   s: vector of length N representing the s grid
-  #   eps: small positive number for numerical boundaries
-  dz <- (1 - 2 * eps) / (R - 1)   # Grid spacing for the uniform measure
-  
-  # Preallocate the result vector
+
+  dz <- (max_y - min_y - 2 * eps) / (R - 1)
+
   fnS <- numeric(length(s))
-  
+
   for (j in seq_along(s)) {
-    # For a fixed s[j], the integrand at each z is:
-    #    f(z, s[j]) = exp( -(1+psi_z) * s[j] ) / s[j]
-    # Taking logs gives:
-    #    log f(z, s[j]) = -(1+psi_z) * s[j] - log(s[j])
     log_vals <- -(1 + psi_z) * s[j] - log(s[j])
-    
-    # Use the log-sum-exp trick for the summation over z grid:
+
     max_val <- max(log_vals)
     log_sum_exp <- max_val + log(sum(exp(log_vals - max_val)))
-    
-    # Multiply by the grid spacing to approximate the integral:
+
     log_integral <- log(dz) + log_sum_exp
-    
-    # Store the stabilized value (exponentiating back)
     fnS[j] <- exp(log_integral)
   }
-  
-  
+
   ds <- diff(s)
-  h <- (fnS[-N] + fnS[-1]) / 2
-  Nv <- rev(cumsum(rev(ds * h)))
+  h_trap <- (fnS[-N] + fnS[-1]) / 2
+  Nv <- rev(cumsum(rev(ds * h_trap)))
   Nv <- Nv * alpha
   Nv <- c(Nv, 0)
-  
-  
-  #Generate random jumps RJ and random locations RL
+
   xi <- cumsum(rexp(M, rate = 1.0))
   RJ <- numeric(M)
   iNv <- N - 1
-  
+
   for (i in seq_len(M)) {
     while (iNv > 0 && Nv[iNv] < xi[i]) {
       iNv <- iNv - 1
     }
     RJ[i] <- s[iNv + 1]
   }
-  
-  
+
   RL <- numeric(M)
+
   for (m in seq_len(M)) {
     xi_rl <- runif(1)
-    # Compute log probabilities: log_temp = -(1 + psi_z) * RJ[m]
+
     log_temp <- -(1 + psi_z) * RJ[m]
-    
-    # Stabilize by subtracting the maximum log value
     max_log <- max(log_temp)
-    
-    # Convert to probabilities in a numerically stable way
+
     p <- exp(log_temp - max_log)
     p <- p / sum(p)
-    
-    # Compute the cumulative probabilities
+
     cumsum_p <- cumsum(p)
-    
-    # Select the index where the cumulative sum exceeds xi_rl
     RL[m] <- z[min(which(cumsum_p > xi_rl))]
   }
-  
-  
-  # Second Part: random jumps [for fixed locations]
-  # Suppose u is a vector and zstar is a vector.
-  # We want to compute, for each fixed zstar[j]:
-  #   psi_star[j] = sum(u_i * exp(tht * zstar[j]))
-  # We'll compute it in a numerically stable way:
-  
-  # Create a matrix of log-terms: each element is log(u_i) + tht * zstar[j]
-  log_terms <- outer(log(u), zstar, function(lu, z) lu + tht * z)
 
-  # Adding H, something like
-  # log_terms <- outer(log(u), zstar, function(lu, z, H, ...) lu + tht * z + H(...))
-  
-  # For each column (corresponding to a fixed zstar), use the log-sum-exp trick
-  # psi_star still gets big, maybe non-avoidable?
+  # Fixed-location jumps
+  log_terms <- sweep(tht %o% zstar, 1, log(u) + h, "+")
+
   psi_star <- sapply(seq_along(zstar), function(j) {
     max_val <- max(log_terms[, j])
     exp(max_val + log(sum(exp(log_terms[, j] - max_val))))
   })
-  
+
   Jstar <- rgamma(length(zstar), shape = nstar, rate = psi_star + 1)
-  
-  return(list(
+
+  list(
     RL = RL,
     RJ = RJ,
     zstar = zstar,
-    Jstar = Jstar,
-    theta_tilde = tht
-  ))
-  }
+    Jstar = Jstar
+  )
+}
 
 # ------------------------------------------------------------------
 # Compute observation-specific marginal CDFs F_{x_j}(y_j) using a
@@ -802,7 +755,7 @@ marginal_cdf_unif_kde <- function(y, crm.atoms, crm.jumps, theta, c0,
 # Returns:
 #   logc : scalar value of log c_rho(u)
 # ------------------------------------------------------------------
-log_copula_gaussian <- function(u, rho) {
+log_copula_gaussian <- function(u, rho, corr) {
   n <- length(u)
 
   # avoid boundary
@@ -813,11 +766,18 @@ log_copula_gaussian <- function(u, rho) {
   z <- qnorm(u)
 
   # Exchangeable correlation structure
-  Sigma <- matrix(rho, n, n)
-  diag(Sigma) <- 1
+  # Sigma <- matrix(rho, n, n)
+  # diag(Sigma) <- 1
 
-  # # AR(1) correlation
+  # AR(1) correlation
   # Sigma <- outer(1:n, 1:n, function(i, j) rho^abs(i - j))
+
+  if (corr == "ex") {
+    Sigma <- matrix(rho, n, n)
+    diag(Sigma) <- 1
+  } else {
+    Sigma <- outer(1:n, 1:n, function(i, j) rho^abs(i - j))
+  }
 
   Sigma_inv <- solve(Sigma)
   logdet <- determinant(Sigma, logarithm = TRUE)$modulus
@@ -862,7 +822,7 @@ log_copula_gaussian <- function(u, rho) {
 #   logcop_obs  : numeric vector of observation-level copula
 #                 log-likelihood contributions (same length as y)
 # ------------------------------------------------------------------
-log_copula_contribution_by_obs <- function(y, group_index, rho,
+log_copula_contribution_by_obs <- function(y, group_index, rho, corr,
                                            crm.atoms, crm.jumps, theta, c0,
                                            min_y, max_y) {
   
@@ -877,14 +837,12 @@ log_copula_contribution_by_obs <- function(y, group_index, rho,
   ## 3. Compute copula contribution per group, then distribute to observations
   groups <- unique(group_index)
 
-
-
   for (g in groups) {
     idx <- which(group_index == g)
     u <- Fy[idx]
     n_i <- length(u)
 
-    logc_group <- log_copula_gaussian(u, rho)
+    logc_group <- log_copula_gaussian(u, rho, corr)
     
     # Assign equal share to each observation in the group
     logcop_obs[idx] <- logc_group / n_i
@@ -892,10 +850,6 @@ log_copula_contribution_by_obs <- function(y, group_index, rho,
 
   logcop_obs
 }
-
-
-
-
 
 # ------------------------------------------------------------------
 # Log posterior kernel for the copula dependence parameter rho
@@ -918,7 +872,7 @@ log_copula_contribution_by_obs <- function(y, group_index, rho,
 # Returns:
 #   Scalar log posterior value log pi(rho | ·), up to an additive constant
 # ------------------------------------------------------------------
-log_post_rho <- function(rho, logc_obs) {
+log_post_rho <- function(rho, logc_obs, shape1, shape2) {
   
   ## Enforce support of the copula parameter
   if (rho <= 0 || rho >= 1) return(-Inf)
@@ -926,17 +880,16 @@ log_post_rho <- function(rho, logc_obs) {
   ## Copula log-likelihood contribution
   loglik <- sum(logc_obs)
   
-  ## Beta(8, 2) prior on rho
-  ## We probably need to make the prior on rho as an argument
-  logprior <- dbeta(rho, shape1 = 8, shape2 = 2, log = TRUE)
+  ## Beta prior on rho
+  logprior <- dbeta(rho, shape1 = shape1, shape2 = shape2, log = TRUE)
   
   ## Log posterior kernel
   loglik + logprior
 }
 
-calc_exceed <- function(z_atoms, J_jumps, thr_vec) {
-    Jsum <- sum(J_jumps)
-    if (!is.finite(Jsum) || Jsum <= 0) return(rep(NA_real_, length(thr_vec)))
-    w <- J_jumps / Jsum  # temporary normalization for probability calc
-    vapply(thr_vec, function(t) sum(w[z_atoms >= t]), numeric(1))
-  }
+# calc_exceed <- function(z_atoms, J_jumps, thr_vec) {
+#     Jsum <- sum(J_jumps)
+#     if (!is.finite(Jsum) || Jsum <= 0) return(rep(NA_real_, length(thr_vec)))
+#     w <- J_jumps / Jsum  # temporary normalization for probability calc
+#     vapply(thr_vec, function(t) sum(w[z_atoms >= t]), numeric(1))
+#   }

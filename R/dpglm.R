@@ -4,16 +4,12 @@
 #' @import mvtnorm
 #' @import gldrm
 #'
-#' @param formula An object of class "formula".
+#' @param formula An object of class  \code{\link[stats]{formula}}.
 #' @param data An optional data frame containing the variables in the model.
-#' @param link Link function. Defaults to log.
-#' Can be a character string to be passed to the
-#' \code{make.link} function in the \code{stats} package (e.g. "identity",
-#' "logit", or "log").
-#' Alternatively, \code{link} can be a list containing three functions named
-#' \code{linkfun}, \code{linkinv}, and \code{mu.eta}. The first is the link
-#' function. The second is the inverse link function. The third is the derivative
-#' of the inverse link function. All three functions must be vectorized.
+#' @param link Optional character string or link object specifying the mean link
+#' function. If \code{NULL}, a default link is chosen based on the response
+#' support: \code{"logit"} for responses in \code{(0, 1)}, \code{"log"} for
+#' nonnegative responses, and \code{"identity"} otherwise.
 #' @param dpglmControl Optional control arguments.
 #' Passed as an object of class "dpglmControl", which is constructed by the
 #' \code{dpglm.control} function.
@@ -23,10 +19,33 @@
 #' \code{theta.control} function.
 #' See \code{theta.control} documentation for details.
 #'
-#' @return An S3 object of class "dpglm".
+#' @return List of class "dpglm" containing information including
+#' posterior samples, Metropolis-Hastings acceptance rates, and model specification.
+#' See details for more information.
+#' 
+#' @details
+#' The "dpglm" class is a list of the following items.
+#' \itemize{
+#' \item \code{samples} A list containing the MCMC samples for
+#' \code{beta} and \code{crm}.
+#' \item \code{mb} Prior mean for \code{beta}.
+#' \item \code{Sb} Prior variance-covariance matrix for \code{beta}.
+#' \item \code{formula} Model formula.
+#' \item \code{data} Model data frame.
+#' \item \code{link} Link function. If a character string was passed to the
+#' \code{link} argument, then this will be an object of class "link-glm".
+#' Otherwise, it will be the list of three functions passed to the \code{link} argument.
+#' \item \code{spt} Support of response variable \code{y} used in model fitting.
+#' \item \code{mu0} Mean of the reference distribution obtained by model fit.
+#' \item \code{burnin} The number of burn-in MCMC iterations.
+#' \item \code{thin} Thinning parameter used for MCMC
+#' \item \code{save} The number of saved MCMC iterations.
+#' \item \code{beta_acceptance} Proportion of accepted proposals for beta during MCMC.
+#' \item \code{crm_acceptance} Proportion of accepted proposals for CRM during MCMC.
+#' }
 #'
 #' @export
-dpglm <- function(formula, data = NULL, link = "log",
+dpglm <- function(formula, data = NULL, link = NULL,
                   dpglmControl = dpglm.control(), thetaControl = theta.control()) {
 
   # Model initialization
@@ -37,6 +56,16 @@ dpglm <- function(formula, data = NULL, link = "log",
   y  <- stats::model.response(mf, type = "numeric")
 
   ## Extract link
+  if (is.null(link)) {
+    if (all(y > 0 & y < 1, na.rm = TRUE)) {
+      link <- "logit"
+    } else if (all(y >= 0, na.rm = TRUE)) {
+      link <- "log"
+    } else {
+      link <- "identity"
+    }
+  }
+
   test.vectorized <- TRUE
   if (is.character(link)) {
     test.vectorized <- FALSE
@@ -157,7 +186,6 @@ dpglm <- function(formula, data = NULL, link = "log",
     mb               = fit$mb,
     Sb               = fit$Sb,
     formula          = formula,
-    type             = "dpglm",
     data             = data.frame(mf),
     link             = link,
     spt              = fit$spt,
