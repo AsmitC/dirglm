@@ -260,11 +260,11 @@ sim_data <- function(n, true_beta) {
 
 # Run simulation
 set.seed(832)
-iter <- 500
+iter <- 20
 dat <- sim_data(100, truth1$beta)
 truth1$f0[, 2] <- truth1$f0[, 2] / sum(truth1$f0[, 2])
 fit <- dpglm(Y ~ X2, data = data.frame(Y = dat$Y, X2 = dat$X2), link = "logit",
-             dpglmControl = dpglm.control(save = iter, thin = 1,
+             dpglmControl = dpglm.control(burnin = 10, save = iter, thin = 1,
                                           seed = 832))
 ```
 
@@ -353,7 +353,7 @@ print(tail(new_crm_df, 5))
 
 ```{r}
 make_truth_grid <- function() {
-  truth <- readRDS("../f0_kde_unif_0_1.rds")
+  truth <- readRDS("../..//f0_kde_unif_0_1.rds")
   spt <- as.numeric(truth$spt)
   f0 <- as.numeric(truth$f0)
   dx <- diff(spt)[1]
@@ -458,15 +458,15 @@ sim_dat <- simulate_et_data(
   seed = 832
 )
 
-fit <- cdpglm(
+cdpglm.fit <- cdpglm(
   y ~ biomarker * visit,
   data = sim_dat,
   group_index = sim_dat$subject,
   link = "logit",
   cdpglmControl = cdpglm.control(
-    save = 1000,
+    save = 50,
     thin = 1,
-    burnin = 100,
+    burnin = 10,
     spt = c(0, 1),
     seed = 832,
     corr = "ex"

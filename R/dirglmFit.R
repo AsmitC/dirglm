@@ -32,7 +32,7 @@
 #'
 #' @return Object of S3 class "dirglmControl"; a list of control parameters
 #' for the Dir-GLM fitting function.
-#' 
+#'
 #' @examples
 #' \dontrun{
 #' ctrl <- dirglm.control(burnin = 100,
@@ -128,6 +128,10 @@ dirglmFit <- function(formula, data, X, y,                # Data
   iter <- burnin + thin * save
 
   beta_samples <- matrix(NA, nrow = save, ncol = p)
+  beta_names <- colnames(X)
+  if (is.null(beta_names)) beta_names <- paste0("beta_", seq_len(p) - 1L)
+  beta_names[1] <- "Intercept"
+  colnames(beta_samples) <- beta_names
   f0_samples   <- matrix(NA, nrow = save, ncol = l)
 
   beta <- init$beta

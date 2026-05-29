@@ -33,7 +33,7 @@
 #' @param crmStart Initial value for the CRM state, given as a list with components
 #' \code{z.tld} and \code{J.tld}. Defaults to NULL.
 #' @param seed Random seed. Defaults to NULL.
-#' @param robust Provides numerical stability. Defaults to \code{TRUE}. See details for more. 
+#' @param robust Provides numerical stability. Defaults to \code{TRUE}. See details for more.
 #'
 #' @return An object of class \code{"cdpglmControl"}; a list of control
 #' parameters passed to the internal CDPGLM fitting routine.
@@ -58,7 +58,7 @@ cdpglm.control <- function(burnin = 100, thin = 10, save = 1000,
                            rho_prior_shape = c(8, 2),
                            betaStart = NULL, varbetaStart = NULL,
                            thetaStart = NULL, crmStart = NULL,
-                           seed = NULL, robust = NULL) {
+                           seed = NULL, robust = TRUE) {
   if (burnin < 0 || floor(burnin) != burnin) {
     stop("Number of burn-in samples must be an integer >= 0.", call. = FALSE)
   }
@@ -148,12 +148,12 @@ cdpglmFit <- function(formula, data, X, y, group_index,
   corr            <- cdpglmControl$corr
   rho_proposal_sd <- cdpglmControl$rho_proposal_sd
   rho_prior_shape <- cdpglmControl$rho_prior_shape
-  
+
   # Support
   if (is.unsorted(spt)) spt <- sort(spt)
   min_y <- spt[1]
   max_y <- spt[2]
-  
+
   # MCMC Initialization
   n    <- length(y)
   X    <- as.matrix(X, nrow = n)
@@ -167,6 +167,10 @@ cdpglmFit <- function(formula, data, X, y, group_index,
   linkinv <- link$linkinv
 
   beta_samples  <- matrix(NA, nrow = iter, ncol = p)
+  beta_names <- colnames(X)
+  if (is.null(beta_names)) beta_names <- paste0("beta_", seq_len(p) - 1L)
+  beta_names[1] <- "Intercept"
+  colnames(beta_samples) <- beta_names
   theta_samples <- matrix(NA, nrow = iter, ncol = n)
   h_samples     <- matrix(NA, nrow = iter, ncol = n)
   u_samples     <- z_samples <- matrix(NA, nrow = iter, ncol = n)
@@ -304,7 +308,7 @@ cdpglmFit <- function(formula, data, X, y, group_index,
       message(e)
       NULL
     })
-    
+
     # Check if `optim()` failed
     if (!is.null(result) && is.finite(det(result$hessian))) {
       beta_mode_ <- result$par
@@ -316,13 +320,13 @@ cdpglmFit <- function(formula, data, X, y, group_index,
         message(e)
         NULL
       }) # If inversion fails, return NULL
-      
+
       # Only proceed if covariance matrix is valid and positive definite
       if (!is.null(beta_cov_)) {
         # Check positive semi-definiteness
         if (all(eigen(beta_cov_, symmetric = TRUE, only.values = TRUE)$values >=
                 -sqrt(.Machine$double.eps))) {
-          
+
           # Force positive definiteness if needed
           beta_cov_ <- as.matrix(Matrix::nearPD(beta_cov_)$mat)
 

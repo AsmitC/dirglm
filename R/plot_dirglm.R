@@ -34,7 +34,7 @@
 #' f0 support, depending on the value of \code{what}.
 #'
 #' @details
-#' If \code{pars} is \code{NULL} and the number of \code{beta} coefficients is greater
+#' If \code{pars = NULL} and the number of \code{beta} coefficients is greater
 #' than \code{top_k}, the top \code{top_k} coefficients ordered by \code{order}
 #' are plotted. The default for \code{top_k} is 6 and the default sorting mechanism
 #' is the coefficient magnitude. If the number of coefficients is less than \code{top_k},
@@ -54,7 +54,7 @@ plot_dirglm <- function(
     common_xlim = FALSE,
     ncol = NULL,
     # aesthetics
-    col = par("col"),
+    col = graphics::par("col"),
     band_alpha = 0.25,
     line_lwd = 2,
     point_pch = 16,
@@ -74,9 +74,14 @@ plot_dirglm <- function(
   low_key <- sprintf("l-%.0f%% CrI", 100 * prob)
   upp_key <- sprintf("u-%.0f%% CrI", 100 * prob)
 
-  # Beta plotting (default)
+  # Beta plotting
   if (what == "beta") {
     beta_samples <- as.matrix(fit$samples$beta)
+    if (is.null(colnames(beta_samples))) {
+      colnames(beta_samples) <- paste0("beta_", seq_len(ncol(beta_samples)) - 1L)
+      colnames(beta_samples)[1] <- "Intercept"
+    }
+
     btab <- as.data.frame(s$beta)
 
     center_all <- setNames(btab[,"Estimate"], rownames(btab))
@@ -110,8 +115,13 @@ plot_dirglm <- function(
                       if (robust) "Medians" else "Means", 100 * prob)
     }
 
-    op <- par(no.readonly = TRUE); on.exit(par(op))
-    par(mfrow = c(nrow, ncol), oma = c(0, 0, if (k > 1) 2.2 else 0, 0))
+    op <- graphics::par(no.readonly = TRUE)
+    on.exit(graphics::par(op))
+    graphics::par(
+      mfrow = c(nrow, ncol),
+      mar = c(3.5, 3.5, 2, 1),
+      mgp = c(2, 0.7, 0)
+    )
 
     # Plot each beta[j]
     for (j in seq_len(k)) {

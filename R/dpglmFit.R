@@ -25,17 +25,17 @@
 #' @param crmStart Initial value for the CRM state, given as a list with components
 #' \code{z.tld} and \code{J.tld}. Defaults to NULL.
 #' @param seed Random seed. Defaults to NULL.
-#' @param robust Provides numerical stability. Defaults to \code{TRUE}. See details for more. 
+#' @param robust Provides numerical stability. Defaults to \code{TRUE}. See details for more.
 #'
 #' @return Object of S3 class "dpglmControl".
-#' 
+#'
 #' @details Setting \code{robust = TRUE} will tilt the CRM weights at each MCMC iteration
 #' to have the desired mean \code{mu0}. If \code{robust = FALSE}, these weights can
 #' vary more in magnitude and lead to downstream numerical instability.
-#' 
+#'
 #' @return An object of class \code{"dpglmControl"}; a list of control
 #' parameters for the DPGLM fitting function.
-#' 
+#'
 #' @examples
 #' \dontrun{
 #' ctrl <- dpglm.control(burnin = 100,
@@ -157,19 +157,23 @@ dpglmFit <- function(formula, data, X, y,        # Data
   iter <- burnin + thin * save
 
   if (is.null(copula) || !is.list(copula)) copula <- list()
-  
+
   # Default h for the DPGLM model
   h <- h_ <- hstar <- 0
 
   if (!is.null(seed)) set.seed(seed)
-  
+
   if (is.null(c0)) c0 <- c0_silverman(y) / 4
-  
+
   # Extract link
   linkfun <- link$linkfun
   linkinv <- link$linkinv
 
   beta_samples <- matrix(NA, nrow = iter, ncol = p)
+  beta_names <- colnames(X)
+  if (is.null(beta_names)) beta_names <- paste0("beta_", seq_len(p) - 1L)
+  beta_names[1] <- "Intercept"
+  colnames(beta_samples) <- beta_names
   theta_samples <- matrix(NA, nrow = iter, ncol = n)
   u_samples <- z_samples <- matrix(NA, nrow = iter, ncol = n)
   crm_samples   <- list()
@@ -184,22 +188,22 @@ dpglmFit <- function(formula, data, X, y,        # Data
   crm_samples[[1]] <- list(z.tld = z.tld, J.tld = J.tld)
 
   ord <- order(J_tld)[1:M]
-  
+
   RL <- z_tld[ord]
   RJ <- J_tld[ord]
   theta_samples[1, ] <- theta <- theta_ref <- init$theta
   z_samples[1, ] <- z <- z_sampler_unifK(y, c0, z.tld, J.tld, theta, min_y, max_y, eps)
 
   btheta <- b_theta(theta, z.tld, J.tld)
-  
+
   T_vec <- exp(btheta)
   u_samples[1, ] <- u <- rgamma(n, shape = 1, rate = T_vec)
-  
+
   resampled_z <- resample_zstar(z)
   zstar <- resampled_z$zstar
   nstar <- resampled_z$nstar
   Jstar <- rgamma(n = length(nstar), shape = nstar, rate = 1)
-  
+
   count1 <- count2 <- 0
 
   theta0 <- gldrm:::getTheta(
@@ -255,8 +259,6 @@ dpglmFit <- function(formula, data, X, y,        # Data
 
   # Start MCMC loop
   for(itr in 2:iter){
-    if(itr%%50==0) cat("\nStarting iteration:", itr)
-    
     # Optimization to find the mode
     result <- tryCatch({
       optim(par = beta, fn = logpost_beta, linkinv = linkinv, z = z, X = X,
@@ -267,11 +269,11 @@ dpglmFit <- function(formula, data, X, y,        # Data
       message(e)
       return(NULL)
     })  # If error occurs, return NULL
-    
+
     # Check if `optim()` failed
     if (!is.null(result) && is.finite(det(result$hessian))) {
       beta_mode_ <- result$par
-      
+
       # Safely compute Hessian inverse
       beta_cov_ <- tryCatch({
         -solve(result$hessian)
@@ -279,33 +281,33 @@ dpglmFit <- function(formula, data, X, y,        # Data
         message(e)
         return(NULL)
       })  # If inversion fails, return NULL
-      
+
       # Only proceed if covariance matrix is valid and positive definite
       if (!is.null(beta_cov_)) {
         # Check positive semi-definiteness
-        if (all(eigen(beta_cov_, symmetric = TRUE, only.values = TRUE)$values >= 
+        if (all(eigen(beta_cov_, symmetric = TRUE, only.values = TRUE)$values >=
                 -sqrt(.Machine$double.eps))) {
-          
+
           # Force positive definiteness if needed
           beta_cov_ <- as.matrix(Matrix::nearPD(beta_cov_)$mat)
-          
+
           # Sample new beta from proposal distribution
           beta_ <- as.numeric(rmvnorm(n = 1, mean = beta_mode_, sigma = beta_cov_))
-          
+
           mean_z_ <- linkinv(X %*% beta_)
-          
+
           if (min(mean_z_) >= min(z.tld) && max(mean_z_) <= max(z.tld)) {
-            
+
             # Compute log proposal values
             pr_logprop_beta <- dmvnorm(x = beta_, mean = beta_mode, sigma = beta_cov, log = TRUE)
             cr_logprop_beta <- dmvnorm(x = beta, mean = beta_mode_, sigma = beta_cov_, log = TRUE)
-            cr_logpost_beta <- logpost_beta(beta = beta, linkinv = linkinv, z = z, X = X, atoms = z.tld, 
+            cr_logpost_beta <- logpost_beta(beta = beta, linkinv = linkinv, z = z, X = X, atoms = z.tld,
                                             jumps  = J.tld, mu_beta = mb,
                                             sigma_beta = Sb, h = h)
-            pr_logpost_beta <- logpost_beta(beta = beta_, linkinv = linkinv, z = z, X = X, atoms = z.tld, 
+            pr_logpost_beta <- logpost_beta(beta = beta_, linkinv = linkinv, z = z, X = X, atoms = z.tld,
                                             jumps = J.tld, mu_beta = mb,
                                             sigma_beta = Sb, h = h_)
-            
+
             # Metropolis-Hastings acceptance step
             log_acc_prob <- pr_logpost_beta - cr_logpost_beta + cr_logprop_beta - pr_logprop_beta
             if (log(runif(1)) < log_acc_prob) {
@@ -330,7 +332,7 @@ dpglmFit <- function(formula, data, X, y,        # Data
       ySptIndex  = NULL,
       thetaStart = theta
     )$theta
-    
+
     if (any(theta > 50)) {
       idx <- which(theta > 50)
       theta[idx] <- 50
@@ -339,7 +341,7 @@ dpglmFit <- function(formula, data, X, y,        # Data
 
     # u update ----------------------------------------
     u <- sampler_u(u, zstar, nstar, theta, alpha, delta, min_y, max_y, eps, h)
-  
+
     # CRM update --------------------------------------
     crm_star <- crm_sampler(M, u, zstar, nstar, theta, alpha, min_y, max_y, eps, h)
     z.tld_star <- c(crm_star$RL, crm_star$zstar)
@@ -348,7 +350,7 @@ dpglmFit <- function(formula, data, X, y,        # Data
     crm_2 <- crm_sampler(M, u, zstar, nstar, theta, alpha, min_y, max_y, eps, h)
     z.tld_2 <- c(crm_2$RL, crm_2$zstar)
     J.tld_2 <- c(crm_2$RJ, crm_2$Jstar)
-    
+
     if(min(meanY_x) >= min(z.tld_star) && max(meanY_x) <= max(z.tld_star)){
       # MH step
       theta_star <- gldrm:::getTheta(
@@ -365,7 +367,7 @@ dpglmFit <- function(formula, data, X, y,        # Data
         theta_star[idx] <- 50
         warning("Capped some values of Theta at 50. Consider increasing M.")
       }
-      
+
       crm_star_2 <- crm_sampler(M, u, zstar, nstar, theta_star, alpha, min_y, max_y, eps, h)
       z.tld_star_2 <- c(crm_star_2$RL, crm_star_2$zstar)
       J.tld_star_2 <- c(crm_star_2$RJ, crm_star_2$Jstar)
@@ -389,7 +391,7 @@ dpglmFit <- function(formula, data, X, y,        # Data
           -b_th_crmstar2 + b_thstar_crmstar2 +
             b_th_crm2 - b_thstar_crm2
         )
-      
+
       if(log(runif(1)) < log_r){
         count2 <- count2 + 1
         RL <- crm_star$RL
@@ -401,10 +403,10 @@ dpglmFit <- function(formula, data, X, y,        # Data
         theta <- theta_star
       }
     }
-    
+
     # z update ------------------------------------------------------------------
     z <- z_sampler_unifK(y, c0, z.tld, J.tld, theta, min_y, max_y, eps)
-    
+
     # zstar and nstar update ----------------------------------------------------
     resampled_z <- resample_zstar(z)
     zstar <- resampled_z$zstar
@@ -424,7 +426,7 @@ dpglmFit <- function(formula, data, X, y,        # Data
       theta0[idx] <- 50
       warning("Capped some values of Theta at 50. Consider increasing M.")
     }
-    
+
     temp <- exp(theta0 * z.tld - max(theta0 * z.tld))
     Jtilt <- temp * J.tld
     W <- sum(Jtilt)
@@ -435,9 +437,9 @@ dpglmFit <- function(formula, data, X, y,        # Data
     } else {
       J.tld_ll <- Jtld_0
     }
-  
+
     lnlik <- loglik(linkinv = linkinv, z = z, X = X, beta = beta, atoms = z.tld, jumps = J.tld_ll)
-    
+
     # Storing MCMC simulations --------------------------------------------------
     z_samples[itr, ] <- z
     u_samples[itr, ] <- u
@@ -446,14 +448,14 @@ dpglmFit <- function(formula, data, X, y,        # Data
     crm_samples[[itr]] <- list(z.tld = z.tld, J.tld = J.tld)
     lnlik_samples[itr] <- lnlik
   }
-  
+
   crm_samples <- data.frame(
   z.tld = I(lapply(crm_samples, `[[`, "z.tld")),
   J.tld = I(lapply(crm_samples, `[[`, "J.tld"))
   )
   samples <- list(z = z_samples, beta = beta_samples,
                   crm = crm_samples, theta = theta_samples)
-  
+
   list(samples         = samples,
        mb              = mb,
        Sb              = Sb,

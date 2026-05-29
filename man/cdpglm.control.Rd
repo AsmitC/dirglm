@@ -27,7 +27,7 @@ cdpglm.control(
   thetaStart = NULL,
   crmStart = NULL,
   seed = NULL,
-  robust = NULL
+  robust = TRUE
 )
 }
 \arguments{

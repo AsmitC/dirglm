@@ -4,10 +4,10 @@
 \alias{summary.dirglm}
 \title{Creates a summary of a fitted \code{dirglm} object}
 \usage{
-\method{summary}{dirglm}(fit, prob = 0.95, robust = FALSE)
+\method{summary}{dirglm}(object, prob = 0.95, robust = FALSE)
 }
 \arguments{
-\item{fit}{A fitted \code{dirglm} object}
+\item{object}{A fitted \code{dirglm} object}
 
 \item{prob}{value between 0 and 1 indicating the desired probability
 level for the credible intervals. Defaults to 0.95.}
