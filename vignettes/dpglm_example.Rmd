@@ -1,0 +1,111 @@
+---
+title: "DPGLM Example"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{dpglm_example}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 5
+)
+```
+
+# Overview
+
+The `dirglm` package provides various Bayesian semi-parametric extensions to the generalized linear model. These are
+available for use through the functions `dirglm`, `dpglm`, and `cdpglm`.
+
+In this document, we will explore how to use the `dpglm` function and inspect its results. In particular, we will
+
+1. Simulate a simple regression model with continuous, real-valued response
+2. Fit `dpglm`
+3. Summarize and visualize the results
+
+```{r setup}
+library(dirglm)
+```
+
+# Simulate Data
+
+We will begin by simulating data from a simple exponential-tilting model.
+
+```{r}
+set.seed(832)
+
+n <- 50
+x <- rnorm(n)
+
+beta_true <- c(0.2, 0.5)
+mu <- plogis(beta_true[1] + beta_true[2] * x)
+
+spt <- seq(1e-4, 1 - 1e-4, length.out = 201)
+f0 <- dnorm(spt, mean = 0.55, sd = 0.15)
+f0 <- f0 / sum(f0)
+
+theta <- gldrm:::getTheta(
+  spt = spt,
+  f0 = f0,
+  mu = mu,
+  sampprobs = NULL,
+  ySptIndex = NULL,
+  thetaStart = NULL
+)$theta
+
+prob_mat <- t(vapply(seq_len(n), function(i) {
+  w <- exp(theta[i] * spt) * f0
+  w / sum(w)
+}, numeric(length(spt))))
+
+y <- vapply(seq_len(n), function(i) {
+  sample(spt, size = 1, prob = prob_mat[i, ])
+}, numeric(1))
+
+dat <- data.frame(y = y, x = x)
+```
+
+# Fit DPGLM
+
+Now, we will fit the `dpglm` model. The number of MCMC draws is kept small to speed up computation, but practitioners may require more iterations for analysis.
+
+```{r}
+fit <- dpglm(
+  y ~ x,
+  data = dat,
+  link = "logit",
+  dpglmControl = dpglm.control(
+    burnin = 10,
+    thin = 1,
+    save = 50,
+    spt = c(0, 1),
+    seed = 832
+  )
+)
+```
+
+# Posterior Summary
+
+The `summary()` method reports posterior summaries for the regression coefficients `beta` and reference distribution `crm`.
+
+```{r}
+summary(fit)
+```
+
+## Plotting
+
+After fitting `dpglm`, one may use `plot_dpglm` to visually inspect some posterior summaries. We will show two examples. The first one inspects `beta`, with some aesthetic customization.
+
+```{r}
+plot_dpglm(fit, col = "#E69F00")
+```
+
+One can modify the plot aesthetics as shown in the vignette for `dpglm`. Posterior summaries of the reference distribution can be inspected visually, as well.
+
+```{r}
+plot_dpglm(fit, what = "crm")
+```

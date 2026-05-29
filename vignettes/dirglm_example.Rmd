@@ -1,5 +1,5 @@
 ---
-title: "dirglm_example"
+title: "Dir-GLM Example"
 output: rmarkdown::html_vignette
 vignette: >
   %\VignetteIndexEntry{dirglm_example}
@@ -8,679 +8,94 @@ vignette: >
 ---
 
 ```{r, include = FALSE}
-library(dirglm)
 knitr::opts_chunk$set(
   collapse = TRUE,
-  comment = "#>"
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 5
 )
 ```
 
-Here, we will provide a few simulation examples for the `dirglm` function. Each function named `sim_dat_X` generates a data set corresponding to different instances of $\beta$, $f_0$, the link function, or some combination of those three. In what follows, each chunk generates a data set from a `sim_dat_X`, fits `dirglm`, and shows the relevant output.
+# Overview
 
-# Data-Generating Functions
-```{r}
-# Required Packages ----
+The `dirglm` package provides various Bayesian semi-parametric extensions to the generalized linear model. These are
+available for use through the functions `dirglm`, `dpglm`, and `cdpglm`.
 
-require(mvtnorm)
-require(gldrm)
-require(extraDistr)
-require(dplyr)
+In this document, we will explore how to use the `dirglm` function and inspect its results. In particular, we will
 
-# Simulation scenario 1 ----
-sim_dat_1 <- function(n, p, seed=100) {
-  set.seed(seed)
-  X <- matrix(c(rep(1, n), rnorm(n * (p-1), mean = 0, sd = 1)),
-              byrow = F,
-              nrow = n,
-              ncol = p)
-  beta <- numeric(p)
-  beta[1:2] <- c(-0.7, 0.2)     # true beta
-  mu <- exp(X %*% beta)         # true mu, g(mu) = log(mu) = X*beta
-  spt <- 0:5                    # support of y
-  f0 <- extraDistr::dtpois(spt, lambda = 1, b = 5)     # true f0
-  theta <- gldrm:::getTheta(
-    spt = spt,
-    f0 = f0,
-    mu = mu,
-    sampprobs = NULL,
-    ySptIndex = NULL
-  )$theta                       # true theta
-  prob <- t(sapply(1:n, function(i)
-    exp(theta[i] * spt) * f0))
-  y <- sapply(1:n, function(i)
-    sample(spt, 1, prob = prob[i, ])) # simulated y
-  sim.data <- data.frame(X, y)
-  return(sim.data)
-}
+1. Simulate a simple regression model with discrete response on finite support
+2. Fit `dirglm`
+3. Summarize and visualize the results
 
-
-# Simulation scenario 2 ----
-sim_dat_2 <- function(n, p, seed=100) {
-  set.seed(seed)
-  X <- matrix(c(rep(1, n), rnorm(n * (p-1), mean = 0, sd = 1)),
-              byrow = F,
-              nrow = n,
-              ncol = p)
-  beta <- numeric(p)
-  beta[1:2] <- c(-0.7, 0.2)     # true beta
-  mu <- exp(X %*% beta)         # true mu, g(mu) = log(mu) = X*beta
-  spt <- 0:5                    # support of y
-  temp <- dpois(spt, lambda = 1)
-  f0 <- numeric(6)
-  f0[1] <- 3 * temp[1] / (3 * temp[1] + sum(temp[-1]))
-  f0[-1] <- temp[-1] / (3 * temp[1] + sum(temp[-1]))  # true f0
-  theta <- gldrm:::getTheta(
-    spt = spt,
-    f0 = f0,
-    mu = mu,
-    sampprobs = NULL,
-    ySptIndex = NULL
-  )$theta                        # true theta
-  prob <- t(sapply(1:n, function(i)
-    exp(theta[i] * spt) * f0))
-  y <- sapply(1:n, function(i)
-    sample(spt, 1, prob = prob[i, ])) # simulated y
-  sim.data <- data.frame(X, y)
-  return(sim.data)
-}
-
-# Simulation scenario 3 ----
-##  Multinomial logistic regression
-sim_dat_3 <- function(n, p, seed=100) {
-  set.seed(seed)
-  X <- matrix(c(rep(1, n), rnorm(n * (p-1), mean = 0, sd = 1)),
-              byrow = FALSE, nrow = n, ncol = p)
-  beta <- numeric(p)
-  beta[1:2] <- c(-1, 1)               # True beta
-  spt <- 0:5
-  mu <- 5 * plogis(X %*% beta)             # True mu
-  f0  <- dbinom(spt, size = 5, prob = 0.5) # True f0
-  theta <- gldrm:::getTheta(
-    spt = spt,
-    f0  = f0,
-    mu  = mu,
-    sampprobs  = NULL,
-    ySptIndex  = NULL
-  )$theta
-  prob <- t(sapply(1:n, function(i) exp(theta[i] * spt) * f0))
-  # No need to normalize below, prob specified
-  y    <- sapply(1:n, function(i) sample(spt, 1, prob = prob[i, ])) # Simulated y
-  data.frame(X, y)
-}
-
-# Simulation scenario 4 ----
-##  Uniform baseline with identity link
-sim_dat_4 <- function(n, p, seed=100) {
-  set.seed(seed)
-  X <- matrix(c(rep(1, n), runif(n * (p-1), min=-1, max=1)),
-              byrow = FALSE, nrow = n, ncol = p)
-  beta <- numeric(p)
-  beta[1:2] <- c(5, 2)               # True beta
-  mu <- X %*% beta                   # True mu
-  spt <- 0:10
-  l <- length(spt)
-  f0 <- rep(1/l, l)                  # True f0
-  theta <- gldrm:::getTheta(
-    spt       = spt,
-    f0        = f0,
-    mu        = mu,
-    sampprobs = NULL,
-    ySptIndex = NULL
-  )$theta
-  prob <- t(sapply(1:n, function(i) exp(theta[i] * spt) * f0))
-  # No need to normalize below, prob specified
-  y    <- sapply(1:n, function(i) sample(spt, 1, prob = prob[i, ])) # Simulated y
-  data.frame(X, y)
-}
+```{r setup}
+library(dirglm)
 ```
 
-# Simulation
+# Simulate Data
 
-## Example 1: Truncated Poisson
+We will begin by simulating data from a simple binomial response model.
+
 ```{r}
-## Example 1
-spt <- 0:5
-mu0 <- 1
-data <- sim_dat_1(n = 500, p = 2)
-dir_glm.fit <- dirglm(y ~ X2, data=data, dirglmControl=dirglm.control(mu0=mu0, spt=spt, rho=1))
-beta_samples <- dir_glm.fit$samples$beta
-f0_samples <- dir_glm.fit$samples$f0
-colMeans(beta_samples)        # true beta is c(-0.7, 0.2)
-colMeans(f0_samples)          # true f0 is truncated Poisson = (0.368, 0.368, 0.184, 0.061, 0.015, 0.003) [rounded]
-```
-
-## Example 2: Zero-inflated truncated Poisson
-```{r}
-## Example 2
-spt <- 0:5
-mu0 <- 1
-data <- sim_dat_2(n = 500, p = 2)
-dir_glm.fit <- dirglm(y ~ X2, data=data, type="dirglm", dirglmControl=dirglm.control(mu0=mu0, spt=spt, rho=1))
-beta_samples <- dir_glm.fit$samples$beta
-f0_samples <- dir_glm.fit$samples$f0
-colMeans(beta_samples)        # true beta is c(-0.7, 0.2)
-colMeans(f0_samples)          # true f0 is tilted, truncated Poisson = (0.636, 0.212, 0.106, 0.035, 0.009, 0.002) [rounded]
-```
-
-## Example 3: Multiple Logistic Regression
-```{r}
-## Example 3
-spt <- 0:5
-mu0 <- 2.5
-data <- sim_dat_3(n = 500, p = 3)
-### Define link
-link <- list(
-  linkfun <- function(mu) log(mu / (5 - mu)),
-  linkinv <- function(eta) 5 * plogis(eta),
-  mu.eta  <- function(eta) 5 * plogis(eta) * (1 - plogis(eta))
-)
-names(link) <- c("linkfun", "linkinv", "mu.eta")
-dir_glm.fit <- dirglm(y ~ X2 + X3, data=data, link=link, type="dirglm",
-                      dirglmControl=dirglm.control(mu0=mu0, spt=spt, rho=1))
-beta_samples <- dir_glm.fit$samples$beta
-f0_samples <- dir_glm.fit$samples$f0
-colMeans(beta_samples)        # true beta is c(-1, 1, 0)
-colMeans(f0_samples)          # true f0 is binomial = (0.031, 0.156, 0.313, 0.313, 0.156, 0.031) [rounded]
-```
-
-## Example 4: Uniform baseline with Identity link
-```{r}
-## Example 4
-spt <- 0:10
-mu0 <- 5
-data <- sim_dat_4(n = 500, p = 5)
-dir_glm.fit <- dirglm(y ~ X2 + X3 + X4 + X5, data=data, link="identity", type="dirglm",
-                        dirglmControl=dirglm.control(mu0=mu0, spt=spt, rho=1))
-beta_samples <- dir_glm.fit$samples$beta
-f0_samples <- dir_glm.fit$samples$f0
-colMeans(beta_samples)        # true beta is c(5, 2, 0, 0, 0)
-colMeans(f0_samples)          # true f0 is uniform = (0.1, 0.1, 0.1, ..., 0.1)
-```
-
-# DPGLM
-```{r}
-rm(list = ls())
-devtools::load_all()
-
-## --------------------------
-## Simulation III setup
-## --------------------------
-f0_true_kde <- readRDS("../DPGLM/DPGLM/sim_truth/f0_kde_unif_0_1.rds")
-spt   <- f0_true_kde$spt
-f0_kde <- f0_true_kde$f0
-
-dx <- diff(spt)[1]
-m0 <- sum(spt * f0_kde) * dx
-
-truth1 <- list(
-  beta = c(1, 0),
-  f0   = matrix(c(spt, f0_kde), ncol = 2, byrow = FALSE)
-)
-
-# truth2 <- list(
-#   beta = c(0.2, 0.7),
-#   f0   = matrix(c(spt, f0_kde), ncol = 2, byrow = FALSE)
-# )
-
-## --------------------------
-## Data generator
-## --------------------------
-sim_data <- function(n, true_beta) {
-  X <- cbind(1, runif(n, -sqrt(12) / 4, sqrt(12) / 4))
-  X[, -1] <- scale(X[, -1])
-
-  mu <- as.numeric(stats::plogis(X %*% true_beta))
-
-  theta <- gldrm:::getTheta(
-    spt = spt,
-    f0  = f0_kde,
-    mu  = mu,
-    sampprobs  = NULL,
-    ySptIndex  = NULL,
-    thetaStart = NULL
-  )$theta
-
-  # Compute the matrix of exponentiated outer products
-  exp_matrix <- exp(outer(theta, spt, "*"))
-
-  # Compute the dot product row-wise and apply the log
-  btheta <- log(exp_matrix %*% f0_kde * dx)
-
-  X <- as.matrix(X)
-  fY <- t(sapply(1:n, function(i) {
-    exp(theta[i] * spt - btheta[i]) * f0_kde
-  }))
-  
-  Y     <- sapply(1:n, function(i) {
-    sample(spt, 1, prob = fY[i, ])
-  })
-
-  return(data.frame(Y, theta = theta, X))
-}
-
-# Run simulation
 set.seed(832)
-iter <- 20
-dat <- sim_data(100, truth1$beta)
-truth1$f0[, 2] <- truth1$f0[, 2] / sum(truth1$f0[, 2])
-fit <- dpglm(Y ~ X2, data = data.frame(Y = dat$Y, X2 = dat$X2), link = "logit",
-             dpglmControl = dpglm.control(burnin = 10, save = iter, thin = 1,
-                                          seed = 832))
+
+n <- 100
+m <- 5
+
+x <- rnorm(n)
+beta <- c(-0.25, 0.75) # True beta
+eta <- beta[1] + beta[2] * x
+p <- plogis(eta)
+y <- rbinom(n, size = m, prob = p) / m
+
+dat <- data.frame(y = y, x = x)
 ```
 
-```{r}
-crm_metrics <- function(zlist, Jlist) {
-  stopifnot(length(zlist) == length(Jlist))
-  T <- length(zlist)
+# Fit Dir-GLM
 
-  out <- data.frame(
-    iter = seq_len(T),
-    n_atoms = NA_integer_,
-    z_min = NA_real_,
-    z_max = NA_real_,
-    J_sum = NA_real_,
-    J_max = NA_real_,
-    J_max_share = NA_real_,
-    ess = NA_real_
-  )
-
-  for (t in seq_len(T)) {
-    z <- zlist[[t]]
-    J <- Jlist[[t]]
-    if (is.null(z) || is.null(J) || length(z) == 0 || length(J) == 0) next
-
-    Jpos <- pmax(J, 0)
-    sJ <- sum(Jpos)
-    w <- if (sJ > 0) Jpos / sJ else rep(NA_real_, length(Jpos))
-
-    out$n_atoms[t]     <- length(z)
-    out$z_min[t]       <- min(z)
-    out$z_max[t]       <- max(z)
-    out$J_sum[t]       <- sJ
-    out$J_max[t]       <- max(Jpos)
-    out$J_max_share[t] <- if (sJ > 0) max(w) else NA_real_
-    out$ess[t]         <- if (sJ > 0) 1 / sum(w^2) else NA_real_
-  }
-
-  out
-}
-
-summ_num <- function(x, name = deparse(substitute(x))) {
-  x <- as.numeric(x)
-  x <- x[is.finite(x)]
-  if (!length(x)) return(data.frame(name=name, n=0, min=NA, q05=NA, med=NA, mean=NA, q95=NA, max=NA))
-  data.frame(
-    name = name,
-    n    = length(x),
-    min  = min(x),
-    q05  = unname(stats::quantile(x, 0.05)),
-    med  = stats::median(x),
-    mean = mean(x),
-    q95  = unname(stats::quantile(x, 0.95)),
-    max  = max(x)
-  )
-}
-
-# Beta
-new_beta_mat <- fit$samples$beta
-new_beta_mean <- colMeans(new_beta_mat, na.rm = TRUE)
-new_beta_sd   <- apply(new_beta_mat, 2, sd, na.rm = TRUE)
-
-print(data.frame(beta_mean = new_beta_mean, beta_sd = new_beta_sd))
-cat("beta_acceptance =", fit$beta_acceptance, "\n")
-cat("crm_acceptance  =", fit$crm_acceptance, "\n")
-
-# CRM
-new_zlist <- fit$samples$crm$z.tld
-new_Jlist <- fit$samples$crm$J.tld
-new_crm_df <- crm_metrics(new_zlist, new_Jlist)
-
-cat("\n--- CRM summary---\n")
-print(rbind(
-  summ_num(new_crm_df$n_atoms, "n_atoms"),
-  summ_num(new_crm_df$ess, "ess"),
-  summ_num(new_crm_df$J_max_share, "J_max_share"),
-  summ_num(new_crm_df$z_min, "z_min"),
-  summ_num(new_crm_df$z_max, "z_max")
-))
-
-# End behavior
-cat("\n--- Last 10 CRM iters ---\n")
-print(tail(new_crm_df, 5))
-```
-
-# CDPGLM
+Now, we will fit the `dirglm` model. The number of MCMC draws is kept small to speed up computation, but practitioners may require more iterations for analysis.
 
 ```{r}
-make_truth_grid <- function() {
-  truth <- readRDS("../..//f0_kde_unif_0_1.rds")
-  spt <- as.numeric(truth$spt)
-  f0 <- as.numeric(truth$f0)
-  dx <- diff(spt)[1]
-  f0 <- f0 / sum(f0 * dx)
-
-  list(
-    spt = spt,
-    f0 = f0,
-    dx = dx
-  )
-}
-
-make_longitudinal_design <- function(n_subjects, n_visits) {
-  visit_values <- if (n_visits == 1L) {
-    0
-  } else {
-    seq(-0.5, 0.5, length.out = n_visits)
-  }
-
-  subject <- rep(seq_len(n_subjects), each = n_visits)
-  biomarker_subject <- 2L * rbinom(n_subjects, size = 1L, prob = 0.5) - 1L
-  biomarker <- rep(biomarker_subject, each = n_visits)
-  visit <- rep(visit_values, times = n_subjects)
-
-  data.frame(
-    subject = subject,
-    biomarker = biomarker,
-    visit = visit,
-    row.names = NULL
-  )
-}
-
-simulate_et_data <- function(n_subjects, n_visits, true_beta, rho, truth_grid, seed = 832) {
-  set.seed(seed)
-
-  design <- make_longitudinal_design(n_subjects = n_subjects, n_visits = n_visits)
-  X <- model.matrix(~ biomarker * visit, data = design)
-  mu <- plogis(drop(X %*% true_beta))
-
-  theta <- gldrm:::getTheta(
-    spt = truth_grid$spt,
-    f0 = truth_grid$f0,
-    mu = mu,
-    thetaStart = NULL,
-    sampprobs = NULL,
-    ySptIndex = NULL
-  )$theta
-
-  exp_matrix <- exp(outer(theta, truth_grid$spt, "*"))
-  btheta <- log(drop(exp_matrix %*% truth_grid$f0) * truth_grid$dx)
-
-  mass_matrix <- t(vapply(seq_len(nrow(X)), function(i) {
-    weights <- exp(theta[i] * truth_grid$spt - btheta[i]) * truth_grid$f0 * truth_grid$dx
-    weights / sum(weights)
-  }, numeric(length(truth_grid$spt))))
-
-  # Exchangeable copula
-  Sigma <- matrix(rho, nrow = n_visits, ncol = n_visits)
-  diag(Sigma) <- 1
-
-  y <- numeric(nrow(design))
-  for (subject_id in seq_len(n_subjects)) {
-    idx <- which(design$subject == subject_id)
-    u <- pnorm(drop(mvtnorm::rmvnorm(1, sigma = Sigma)))
-
-    for (j in seq_along(idx)) {
-      obs <- idx[j]
-      cdf_vals <- cumsum(mass_matrix[obs, ])
-      hit <- which(cdf_vals >= u[j])[1]
-      if (is.na(hit)) {
-        hit <- length(truth_grid$spt)
-      }
-      y[obs] <- truth_grid$spt[hit]
-    }
-  }
-
-  transform(
-    design,
-    y = pmin(pmax(y, 1e-6), 1 - 1e-6),
-    mu_true = mu,
-    theta_true = theta
-  )
-}
-```
-
-Fit cdpglm
-```{r}
-# Fit
-devtools::load_all()
-library(gldrm)
-library(mvtnorm)
-
-truth_grid <- make_truth_grid()
-
-set.seed(832)
-sim_dat <- simulate_et_data(
-  n_subjects = 20,
-  n_visits = 5,
-  true_beta = c(0.6, -1.0, -0.8, 0.8),
-  rho = 0.6,
-  truth_grid = truth_grid,
-  seed = 832
-)
-
-cdpglm.fit <- cdpglm(
-  y ~ biomarker * visit,
-  data = sim_dat,
-  group_index = sim_dat$subject,
+fit <- dirglm(
+  y ~ x,
+  data = dat,
   link = "logit",
-  cdpglmControl = cdpglm.control(
-    save = 50,
-    thin = 1,
+  dirglmControl = dirglm.control(
     burnin = 10,
-    spt = c(0, 1),
-    seed = 832,
-    corr = "ex"
+    thin = 1,
+    save = 500,
+    seed = 832
   )
 )
 ```
 
-Checks
+# Posterior Summary
+
+The `summary()` method reports posterior summaries for the regression coefficients `beta` and reference distribution `f0`.
+
 ```{r}
-## --------------------------
-## CDPGLM diagnostics
-## --------------------------
+summary(fit)
+```
 
-summ_num <- function(x, name) {
-  data.frame(
-    name = name,
-    n = length(x),
-    min = min(x, na.rm = TRUE),
-    q05 = quantile(x, 0.05, na.rm = TRUE),
-    med = median(x, na.rm = TRUE),
-    mean = mean(x, na.rm = TRUE),
-    q95 = quantile(x, 0.95, na.rm = TRUE),
-    max = max(x, na.rm = TRUE),
-    row.names = NULL
-  )
-}
+## Plotting
 
-crm_metrics <- function(zlist, Jlist) {
-  out <- lapply(seq_along(zlist), function(i) {
-    z <- zlist[[i]]
-    J <- Jlist[[i]]
-    Jsum <- sum(J)
-    Jnorm <- J / Jsum
+After fitting `dirglm`, one may use `plot_dirglm` to visually inspect some posterior summaries. We will show two examples. The first one inspects `beta`.
 
-    data.frame(
-      iter = i,
-      n_atoms = length(z),
-      z_min = min(z),
-      z_max = max(z),
-      J_sum = Jsum,
-      J_max = max(J),
-      J_max_share = max(Jnorm),
-      ess = 1 / sum(Jnorm^2)
-    )
-  })
+```{r}
+plot_dirglm(fit, what = "beta")
+```
 
-  do.call(rbind, out)
-}
+One can modify this plot in a few common ways. In the below chunk, we inspect the same posterior samples for `beta`, but make the following changes for visualization:
+1. By setting `pars = "Intercept`, only the posterior draws for the intercept term are shown.
+2. `prob = 0.9` displays a $90\%$ credible interval, as opposed to the default $95\%$.
+3. `robust = TRUE` forces the plot to use the posterior median for computation instead of the posterior mean.
+4. `col = "blue"` changes the default coloring used in the plot.
 
-calc_exceed <- function(z, J, thresholds = c(0.8, 0.9, 0.95)) {
-  J <- J / sum(J)
-  sapply(thresholds, function(t) sum(J[z >= t]))
-}
+```{r}
+plot_dirglm(fit, what = "beta", pars = "Intercept", prob = 0.9, robust = TRUE, col = "#E69F00")
+```
 
-calc_moments <- function(z, J) {
-  J <- J / sum(J)
-  m <- sum(z * J)
-  v <- sum((z - m)^2 * J)
-  c(mean = m, var = v, sd = sqrt(v))
-}
+Similarly, one can visualize reference distribution $f_0$. Similar modifications can be made to the plot. 
 
-## Optional burn-in removal for summaries
-burn <- 0
-keep <- seq.int(burn + 1, nrow(fit$samples$beta))
-
-## --------------------------
-## Beta summary
-## --------------------------
-beta_samps <- fit$samples$beta[keep, , drop = FALSE]
-
-beta_summary <- data.frame(
-  term = colnames(model.matrix(~ biomarker * visit, data = sim_dat)),
-  mean = colMeans(beta_samps),
-  sd = apply(beta_samps, 2, sd),
-  q05 = apply(beta_samps, 2, quantile, 0.05),
-  q50 = apply(beta_samps, 2, quantile, 0.50),
-  q95 = apply(beta_samps, 2, quantile, 0.95)
-)
-
-cat("\n--- Beta posterior summary ---\n")
-print(beta_summary)
-
-## If true beta exists
-true_beta <- c(0.6, -1.0, -0.8, 0.8)
-cat("\n--- Beta comparison ---\n")
-print(data.frame(
-  term = beta_summary$term,
-  truth = true_beta,
-  post_mean = beta_summary$mean,
-  bias = beta_summary$mean - true_beta
-))
-
-## --------------------------
-## Rho summary
-## --------------------------
-rho_samps <- fit$samples$rho[keep]
-
-rho_summary <- data.frame(
-  truth = 0.6,
-  mean = mean(rho_samps),
-  sd = sd(rho_samps),
-  q05 = quantile(rho_samps, 0.05),
-  q50 = quantile(rho_samps, 0.50),
-  q95 = quantile(rho_samps, 0.95)
-)
-
-cat("\n--- Rho posterior summary ---\n")
-print(rho_summary)
-
-## --------------------------
-## CRM summaries
-## --------------------------
-crm <- fit$samples$crm
-z_list <- crm$z.tld[keep]
-J_list <- crm$J.tld[keep]
-
-crm_df <- crm_metrics(z_list, J_list)
-
-cat("\n--- CRM summary ---\n")
-print(rbind(
-  summ_num(crm_df$n_atoms, "n_atoms"),
-  summ_num(crm_df$ess, "ess"),
-  summ_num(crm_df$J_max_share, "J_max_share"),
-  summ_num(crm_df$z_min, "z_min"),
-  summ_num(crm_df$z_max, "z_max"),
-  summ_num(crm_df$J_sum, "J_sum")
-))
-
-cat("\n--- Last 10 CRM iterations ---\n")
-print(tail(crm_df, 10))
-
-## --------------------------
-## CRM truth comparison
-## --------------------------
-truth_z <- truth_grid$spt
-truth_J <- truth_grid$f0 * truth_grid$dx
-truth_J <- truth_J / sum(truth_J)
-
-thresholds <- c(0.8, 0.9, 0.95)
-
-truth_exceed <- calc_exceed(truth_z, truth_J, thresholds)
-
-post_exceed <- t(mapply(
-  calc_exceed,
-  z = z_list,
-  J = J_list,
-  MoreArgs = list(thresholds = thresholds)
-))
-
-exceed_summary <- data.frame(
-  threshold = thresholds,
-  truth = as.numeric(truth_exceed),
-  post_mean = colMeans(post_exceed),
-  post_sd = apply(post_exceed, 2, sd)
-)
-
-cat("\n--- Exceedance probabilities ---\n")
-print(exceed_summary)
-
-truth_mom <- calc_moments(truth_z, truth_J)
-
-post_mom <- t(mapply(calc_moments, z = z_list, J = J_list))
-
-moment_summary <- data.frame(
-  functional = names(truth_mom),
-  truth = as.numeric(truth_mom),
-  post_mean = colMeans(post_mom),
-  post_sd = apply(post_mom, 2, sd)
-)
-
-cat("\n--- CRM moment comparison ---\n")
-print(moment_summary)
-
-## --------------------------
-## Grid-level CRM distance
-## --------------------------
-grid <- truth_z
-breaks <- c(-Inf, (head(grid, -1) + tail(grid, -1)) / 2, Inf)
-
-crm_to_grid <- function(z, J, breaks) {
-  J <- J / sum(J)
-  bin <- cut(z, breaks = breaks, labels = FALSE, include.lowest = TRUE)
-
-  out <- numeric(length(breaks) - 1)
-  rs <- rowsum(J, bin, reorder = FALSE)
-  out[as.integer(rownames(rs))] <- rs[, 1]
-  out
-}
-
-post_grid_mass <- t(mapply(
-  crm_to_grid,
-  z = z_list,
-  J = J_list,
-  MoreArgs = list(breaks = breaks)
-))
-
-post_grid_mean <- colMeans(post_grid_mass)
-
-crm_distance <- data.frame(
-  L1 = sum(abs(post_grid_mean - truth_J)),
-  L2 = sqrt(sum((post_grid_mean - truth_J)^2)),
-  Linf = max(abs(post_grid_mean - truth_J))
-)
-
-cat("\n--- CRM grid distance from truth ---\n")
-print(crm_distance)
-
-## --------------------------
-## Acceptance rates
-## --------------------------
-cat("\n--- Acceptance rates ---\n")
-print(data.frame(
-  beta = fit$p_acc_beta,
-  crm = fit$p_acc_crm,
-  rho = fit$p_acc_rho
-))
+```{r}
+plot_dirglm(fit, what = "f0", prob = 0.8, robust = TRUE, col = "#56B4E9")
 ```

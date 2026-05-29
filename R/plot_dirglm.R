@@ -151,7 +151,7 @@ plot_dirglm <- function(
 
       graphics::lines(dj$x, dj$y, lwd = line_lwd, col = col)
       graphics::abline(v = cj, lty = 2, col = col)       # center reference
-      graphics::mtext(nm, side = 3, line = 0.2, cex = 0.9)
+      if (k > 1) graphics::mtext(nm, side = 3, line = 0.2, cex = 0.9)
     }
 
     if (k > 1 && nzchar(main)) graphics::mtext(main, outer = TRUE, line = 0.6, cex = 1.1)

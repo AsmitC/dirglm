@@ -1,0 +1,148 @@
+---
+title: "DPGLM Example"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{cdpglm_example}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 5
+)
+```
+
+# Overview
+
+The `dirglm` package provides various Bayesian semi-parametric extensions to the generalized linear model. These are
+available for use through the functions `dirglm`, `dpglm`, and `cdpglm`.
+
+In this document, we will explore how to use the `cdpglm` function and inspect its results. In particular, we will
+
+1. Simulate longitudinal data from an exponential-tilting model with a Gaussian copula dependence structure
+2. Fit `cdpglm`
+3. Summarize and visualize the results
+
+```{r setup}
+library(dirglm)
+```
+
+# Simulate Data
+
+```{r}
+set.seed(832)
+
+n_subjects <- 20
+n_visits <- 4
+n <- n_subjects * n_visits
+
+subject <- rep(seq_len(n_subjects), each = n_visits)
+visit <- rep(seq(-0.5, 0.5, length.out = n_visits), times = n_subjects)
+x <- rnorm(n_subjects)
+x <- rep(x, each = n_visits)
+
+X <- model.matrix(~ x + visit)
+beta_true <- c(0.2, 0.5, -0.4)
+
+mu <- plogis(drop(X %*% beta_true))
+
+# Continuous-like baseline on (0, 1)
+spt <- seq(1e-4, 1 - 1e-4, length.out = 201)
+f0 <- dnorm(spt, mean = 0.55, sd = 0.15)
+f0 <- f0 / sum(f0)
+
+theta <- gldrm:::getTheta(
+  spt = spt,
+  f0 = f0,
+  mu = mu,
+  sampprobs = NULL,
+  ySptIndex = NULL,
+  thetaStart = NULL
+)$theta
+
+prob_mat <- t(vapply(seq_len(n), function(i) {
+  w <- exp(theta[i] * spt) * f0
+  w / sum(w)
+}, numeric(length(spt))))
+
+rho_true <- 0.5
+
+Sigma <- matrix(rho_true, nrow = n_visits, ncol = n_visits)
+diag(Sigma) <- 1
+
+y <- numeric(n)
+
+for (id in seq_len(n_subjects)) {
+  idx <- which(subject == id)
+
+  u <- stats::pnorm(drop(mvtnorm::rmvnorm(1, sigma = Sigma)))
+
+  for (j in seq_along(idx)) {
+    obs <- idx[j]
+    cdf_vals <- cumsum(prob_mat[obs, ])
+    y[obs] <- spt[which(cdf_vals >= u[j])[1]]
+  }
+}
+
+dat <- data.frame(
+  y = y,
+  x = x,
+  visit = visit,
+  subject = subject
+)
+```
+
+# Fit CDPGLM
+
+Now, we will fit the `cdpglm` model. The number of MCMC draws is kept small to speed up computation, but practitioners may require more iterations for analysis.
+
+```{r}
+fit <- cdpglm(
+  y ~ x + visit,
+  data = dat,
+  group_index = dat$subject,
+  link = "logit",
+  cdpglmControl = cdpglm.control(
+    burnin = 10,
+    thin = 1,
+    save = 50,
+    spt = c(0, 1),
+    corr = "ex",
+    seed = 832
+  )
+)
+```
+
+# Posterior Summary
+
+The `summary()` method reports posterior summaries for the regression coefficients `beta`, reference distribution `crm`, and correlation parameter `rho`.
+
+```{r}
+summary(fit)
+```
+
+## Plotting
+
+After fitting `cdpglm`, one may use `plot_cdpglm` to visually inspect some posterior summaries. We will show two examples. The first one inspects `beta`.
+
+```{r}
+plot_cdpglm(fit)
+```
+
+Similarly, we can inspect `rho`:
+
+```{r}
+plot_cdpglm(fit, what = "rho")
+```
+
+Finally, we can inspect the reference distribution. As with `plot_dirglm` and `plot_cdpglm`, users can customize some aesthetic aspects of the plot. We show another example here.
+
+```{r}
+plot_cdpglm(fit, what = "crm", col = "#56B4E9",
+            main = "CRM Posterior Mean (95% Credible Interval)",
+            xlab = "Atoms", ylab = "density")
+```

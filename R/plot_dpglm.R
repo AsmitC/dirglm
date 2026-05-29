@@ -31,7 +31,7 @@
 #'
 #' @return An invisible list containing information about the plotted object.
 #'
-#' @deutils::tails
+#' @details
 #' If \code{pars = NULL} and the number of \code{beta} coefficients is greater
 #' than \code{top_k}, the top \code{top_k} coefficients ordered by \code{order}
 #' are plotted. The default for \code{top_k} is 6 and the default sorting mechanism
@@ -167,7 +167,7 @@ plot_dpglm <- function(
 
       graphics::lines(dj$x, dj$y, lwd = line_lwd, col = col)
       graphics::abline(v = cj, lty = 2, col = col)
-      graphics::mtext(nm, side = 3, line = 0.2, cex = 0.9)
+      if (k > 1) graphics::mtext(nm, side = 3, line = 0.2, cex = 0.9)
     }
 
     if (k > 1 && nzchar(main)) {

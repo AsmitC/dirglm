@@ -82,3 +82,10 @@ An invisible list containing information about the plotted object.
 \description{
 Plot DPGLM Posterior Distributions
 }
+\details{
+If \code{pars = NULL} and the number of \code{beta} coefficients is greater
+than \code{top_k}, the top \code{top_k} coefficients ordered by \code{order}
+are plotted. The default for \code{top_k} is 6 and the default sorting mechanism
+is the coefficient magnitude. If the number of coefficients is less than \code{top_k},
+all of them are plotted.
+}
