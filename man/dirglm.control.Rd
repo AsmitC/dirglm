@@ -9,6 +9,9 @@ dirglm.control(
   thin = 10,
   save = 1000,
   rho = 0.1,
+  mb = NULL,
+  Sb = NULL,
+  dir_pr_parm = NULL,
   gamma = 1,
   mu0 = NULL,
   spt = NULL,
@@ -26,6 +29,15 @@ dirglm.control(
 \item{save}{Number of MCMC samples to return. Defaults to 1000.}
 
 \item{rho}{MCMC update step size. A scalar in \eqn{(0, 1]}. Defaults to 0.1.}
+
+\item{mb}{Prior mean for beta. Defaults to a p-length vector whose entries are all 0.}
+
+\item{Sb}{Prior variance-covariance matrix for beta.
+Defaults to the p-dimensional identity matrix. See details for more information.}
+
+\item{dir_pr_parm}{Dirichlet prior parameter for f0. Defaults to the observed
+response frequency distribution. If specified, it should be a p-length vector
+with positive entries.}
 
 \item{gamma}{Shrinkage parameter for the (default) prior variance on \code{beta}.
 Defaults to 1. Will not be used if \code{Sb} is specified in \code{dirglm}.}
@@ -50,10 +62,21 @@ Defaults to \code{TRUE}.}
 \item{seed}{Random seed. Defaults to NULL.}
 }
 \value{
-Object of S3 class "dirglmControl"
+Object of S3 class "dirglmControl"; a list of control parameters
+for the Dir-GLM fitting function.
 }
 \description{
 This function returns control arguments for the \code{dirglm} algorithm.
 Each argument has a default value, which will be used unless a different
 value is provided by the user.
+}
+\examples{
+\dontrun{
+ctrl <- dirglm.control(burnin = 100,
+                       thin = 2,
+                       save = 500,
+                       spt = 0:1,
+                       seed = 123)
+}
+
 }

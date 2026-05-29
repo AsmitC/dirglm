@@ -2,21 +2,18 @@
 % Please edit documentation in R/dirglm.R
 \name{dirglm}
 \alias{dirglm}
-\title{Fits a finite-support Dir-GLM model}
+\title{Fits a Dir-GLM model}
 \usage{
 dirglm(
   formula,
   data = NULL,
   link = "log",
-  mb = NULL,
-  Sb = NULL,
-  dir_pr_parm = NULL,
   dirglmControl = dirglm.control(),
   thetaControl = theta.control()
 )
 }
 \arguments{
-\item{formula}{An object of class "formula".}
+\item{formula}{An object of class  \code{\link[stats]{formula}}.}
 
 \item{data}{An optional data frame containing the variables in the model.}
 
@@ -29,15 +26,6 @@ Alternatively, \code{link} can be a list containing three functions named
 function. The second is the inverse link function. The third is the derivative
 of the inverse link function. All three functions must be vectorized.}
 
-\item{mb}{Prior mean for beta. Defaults to a p-length vector whose entries are all 0.}
-
-\item{Sb}{Prior variance-covariance matrix for beta.
-Defaults to the p-dimensional identity matrix. See details for more information.}
-
-\item{dir_pr_parm}{Dirichlet prior parameter for f0. Defaults to the observed
-response frequency distribution. If specified, it should be a p-length vector
-with positive entries.}
-
 \item{dirglmControl}{Optional control arguments.
 Passed as an object of class "dirglmControl", which is constructed by the
 \code{dirglm.control} function.
@@ -49,10 +37,12 @@ Passed as an object of class "thetaControl", which is constructed by the
 See \code{theta.control} documentation for details.}
 }
 \value{
-An S3 object of class "dirglm". See details.
+List of class "dirglm" containing information including
+posterior samples, Metropolis-Hastings acceptance rates, and model specification See
+details for more information.
 }
 \description{
-Fits a finite-support Dir-GLM model
+Fits a Dir-GLM model
 }
 \details{
 The arguments \code{linkfun}, \code{linkinv}, and \code{mu.eta}
@@ -75,8 +65,23 @@ The "dirglm" class is a list of the following items.
 Otherwise, it will be the list of three functions passed to the \code{link} argument.
 \item \code{spt} Support, \eqn{\{s_j, \ j = 1, 2, ..., l\}}, of response variable \code{y}.
 \item \code{mu0} Mean of the reference distribution \code{f0}.
-\item \code{iter} The total number of MCMC iterations.
-\item \code{p_acc_beta} Proportion of accepted proposals for beta during MCMC.
-\item \code{p_acc_f0} Proportion of accepted proposals for f0 during MCMC.
+\item \code{burnin} The number of burn-in MCMC iterations.
+\item \code{thin} Thinning parameter used for MCMC
+\item \code{save} The number of saved MCMC iterations.
+\item \code{beta_acceptance} Proportion of accepted proposals for beta during MCMC.
+\item \code{f0_acceptance} Proportion of accepted proposals for f0 during MCMC.
 }
+}
+\examples{
+\dontrun{
+set.seed(832)
+x <- rep(0:2, each=3)
+lam <- exp(0.3+0.6*x)
+y <- rpois(length(x), lam)
+dat <- data.frame(x, y)
+fit.test <- dirglm(y ~ x, data=dat,
+                   dirglmControl=dirglm.control(burnin=10,thin=1,save=10))
+summary(fit.test)
+}
+
 }

@@ -2,7 +2,7 @@
 % Please edit documentation in R/mcmc_helpers.R
 \name{f0y}
 \alias{f0y}
-\title{Title: function for calculating \{f0(y_i), i = 1(1)n\}}
+\title{Function for calculating \{f0(y_i), i = 1(1)n\}}
 \usage{
 f0y(y, spt, f0)
 }
@@ -17,6 +17,6 @@ f0y(y, spt, f0)
 (vector) \{f0(y_i), i=1(1)n\}
 }
 \description{
-Title: function for calculating \{f0(y_i), i = 1(1)n\}
+Function for calculating \{f0(y_i), i = 1(1)n\}
 }
 \keyword{internal}

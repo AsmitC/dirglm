@@ -2,7 +2,7 @@
 % Please edit documentation in R/mcmc_helpers.R
 \name{lDir}
 \alias{lDir}
-\title{Title: function for log Dir pdf for x ~ Dir(a)}
+\title{Function for log Dir pdf for x ~ Dir(a)}
 \usage{
 lDir(x, a)
 }
@@ -15,6 +15,6 @@ lDir(x, a)
 (vector) log Dirichlet pdf
 }
 \description{
-Title: function for log Dir pdf for x ~ Dir(a)
+Function for log Dir pdf for x ~ Dir(a)
 }
 \keyword{internal}

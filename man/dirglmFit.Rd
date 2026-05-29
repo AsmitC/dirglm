@@ -2,7 +2,7 @@
 % Please edit documentation in R/dirglmFit.R
 \name{dirglmFit}
 \alias{dirglmFit}
-\title{Main MCMC function}
+\title{Main MCMC Fitting Function for the Dir-GLM}
 \usage{
 dirglmFit(
   formula,
@@ -10,9 +10,6 @@ dirglmFit(
   X,
   y,
   link,
-  mb,
-  Sb,
-  dir_pr_parm,
   mu0,
   spt,
   init,
@@ -20,7 +17,36 @@ dirglmFit(
   thetaControl
 )
 }
+\arguments{
+\item{formula}{Model formula supplied to \code{\link{dirglm}}.}
+
+\item{data}{Data frame containing the variables appearing in \code{formula}.}
+
+\item{X}{Numeric design matrix.}
+
+\item{y}{Numeric response vector.}
+
+\item{link}{Link object containing \code{linkfun}, \code{linkinv},
+and \code{mu.eta}.}
+
+\item{mu0}{Numeric target mean used to identify the reference distribution.}
+
+\item{spt}{Numeric vector giving the support of the response variable.}
+
+\item{init}{List of initial values for the MCMC algorithm.}
+
+\item{dirglmControl}{Object of class \code{"dirglmControl"} containing
+MCMC and tuning parameters.}
+
+\item{thetaControl}{Object of class \code{"thetaControl"} containing
+control arguments for the theta update.}
+}
+\value{
+A list containing posterior samples, acceptance rates, prior settings,
+and model specification information used by \code{\link{dirglm}}.
+}
 \description{
-This function is called by the main \code{dirglm} function.
+Internal function used by \code{\link{dirglm}}.
+Performs MCMC to update model parameters.
 }
 \keyword{internal}

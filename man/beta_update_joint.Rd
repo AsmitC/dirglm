@@ -2,7 +2,7 @@
 % Please edit documentation in R/mcmc_helpers.R
 \name{beta_update_joint}
 \alias{beta_update_joint}
-\title{Title : function for updating beta (jointly)}
+\title{Function for updating beta (jointly)}
 \usage{
 beta_update_joint(
   X,
@@ -44,6 +44,6 @@ beta_update_joint(
 \item{rho}{MCMC update step size, a (scalar) in (0, 1]}
 }
 \description{
-Title : function for updating beta (jointly)
+Function for updating beta (jointly)
 }
 \keyword{internal}

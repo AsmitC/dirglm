@@ -2,7 +2,7 @@
 % Please edit documentation in R/mcmc_helpers.R
 \name{f0_update}
 \alias{f0_update}
-\title{Title: function for updating f0}
+\title{Function for updating f0}
 \usage{
 f0_update(
   y,
@@ -42,6 +42,6 @@ f0_update(
 \item{ind_mt}{indicator matrix with (i,j)th element: 1(y_i == s_j)}
 }
 \description{
-Title: function for updating f0
+Function for updating f0
 }
 \keyword{internal}

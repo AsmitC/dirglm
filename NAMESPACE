@@ -2,8 +2,13 @@
 
 S3method(print,summary.dirglm)
 S3method(summary,dirglm)
+export(b_theta)
+export(cdpglm)
+export(cdpglm.control)
 export(dirglm)
 export(dirglm.control)
+export(dpglm)
+export(dpglm.control)
 export(plot_dirglm)
 import(gldrm)
 import(mvtnorm)

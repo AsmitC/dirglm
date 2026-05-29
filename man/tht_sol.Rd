@@ -2,28 +2,31 @@
 % Please edit documentation in R/mcmc_helpers.R
 \name{tht_sol}
 \alias{tht_sol}
-\title{Title: function for finding theta, btheta & bprime2}
+\title{Solve for Exponential-Tilting Parameters}
 \usage{
 tht_sol(spt, f0, mu, thtst)
 }
 \arguments{
-\item{spt}{(vector) support, \{s_j, j = 1(1)l\}, of response variable y}
+\item{spt}{Numeric vector giving the support points of the response.}
 
-\item{f0}{(vector) \{f0(y = s_j), j=1(1)l\}: free parameter, f0(.) centering density}
+\item{f0}{Numeric vector giving the baseline mass or density evaluated on
+\code{spt}.}
 
-\item{mu}{(vector) \{E(y_i | x_i), i=1(1)n\}}
+\item{mu}{Numeric vector of target conditional means.}
 
-\item{thtst}{(vector) initial value in theta solving iterative algorithm}
+\item{thtst}{Optional numeric vector of starting values for the tilting
+parameters.}
 }
 \value{
-(list) containing:
-\enumerate{
-\item bpr2 (vector) \{second derivative of b(theta_i), i=1(1)n\}
-\item tht (vector) derived parameter theta = \{theta_i = function(beta, f0, x_i), i=1(1)n\}
-\item btht (vector)  normalizing constant b(theta) = \{b(theta_i), i=1(1)n\}
+A list with components:
+\describe{
+\item{\code{bpr2}}{Second derivatives of the cumulant function.}
+\item{\code{tht}}{Tilting parameters.}
+\item{\code{btht}}{Normalizing constants \eqn{b(\theta_i)}.}
 }
 }
 \description{
-Title: function for finding theta, btheta & bprime2
+Computes the observation-specific tilting parameters, normalizing constants,
+and second derivatives for the exponential-tilting model.
 }
 \keyword{internal}

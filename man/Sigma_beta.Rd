@@ -2,7 +2,7 @@
 % Please edit documentation in R/mcmc_helpers.R
 \name{Sigma_beta}
 \alias{Sigma_beta}
-\title{Title: function for finding variance-covariance matrix of beta}
+\title{Function for finding variance-covariance matrix of beta}
 \usage{
 Sigma_beta(X, mu, bpr2, rho, linkfun, mu.eta)
 }
@@ -19,6 +19,6 @@ Sigma_beta(X, mu, bpr2, rho, linkfun, mu.eta)
 variance-covariance (matrix) of beta
 }
 \description{
-Title: function for finding variance-covariance matrix of beta
+Function for finding variance-covariance matrix of beta
 }
 \keyword{internal}

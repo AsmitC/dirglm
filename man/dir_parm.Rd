@@ -2,25 +2,27 @@
 % Please edit documentation in R/mcmc_helpers.R
 \name{dir_parm}
 \alias{dir_parm}
-\title{Title: function for finding dirichlet proposal parameter}
+\title{Compute Dirichlet Proposal Parameters}
 \usage{
 dir_parm(y, tht, btht, dir_pr_parm, ind_mt)
 }
 \arguments{
-\item{y}{(vector) response variable values \{y_i, i=1(1)n\}}
+\item{y}{Numeric response vector.}
 
-\item{tht}{(vector) derived parameter, \{theta_i = function(beta, f0, x_i), i=1(1)n\}}
+\item{tht}{Numeric vector of current tilting parameters.}
 
-\item{btht}{(vector)  normalizing constant b(theta) = \{b(theta_i), i=1(1)n\}}
+\item{btht}{Numeric vector of current normalizing constants.}
 
-\item{dir_pr_parm}{(vector) dirichlet prior parameter}
+\item{dir_pr_parm}{Numeric vector of Dirichlet prior parameters.}
 
-\item{ind_mt}{indicator matrix with (i,j)th element: 1(y_i == s_j)}
+\item{ind_mt}{Indicator matrix whose \eqn{(i,j)} entry identifies whether
+response observation \eqn{i} equals support point \eqn{j}.}
 }
 \value{
-(vector) dirichlet proposal parameter
+Numeric vector of Dirichlet proposal parameters.
 }
 \description{
-Title: function for finding dirichlet proposal parameter
+Constructs the Dirichlet proposal parameter vector used in the update of the
+baseline distribution.
 }
 \keyword{internal}

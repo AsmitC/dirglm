@@ -2,7 +2,7 @@
 % Please edit documentation in R/mcmc_helpers.R
 \name{beta_update_separate}
 \alias{beta_update_separate}
-\title{Title: function for updating beta (one at a time)}
+\title{Function for updating beta (one at a time)}
 \usage{
 beta_update_separate(
   X,
@@ -44,6 +44,6 @@ beta_update_separate(
 \item{rho}{MCMC update step size, a (scalar) in (0, 1]}
 }
 \description{
-Title: function for updating beta (one at a time)
+Function for updating beta (one at a time)
 }
 \keyword{internal}
