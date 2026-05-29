@@ -1,6 +1,6 @@
 #' Control Arguments for CDPGLM
 #'
-#' Creates a list of control parameters used by \code{\link{cdpglm}} and \code{\linl{cdpglmFit}}.
+#' Creates a list of control parameters used by \code{\link{cdpglm}} and \code{\link{cdpglmFit}}.
 #'
 #' @param burnin Number of burn-in MCMC iterations. Defaults to 100.
 #' @param thin Factor by which to thin MCMC iterations. Defaults to 10.

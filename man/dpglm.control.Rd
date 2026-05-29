@@ -81,11 +81,11 @@ This function returns control arguments for the \code{dpglm} algorithm.
 }
 \details{
 Setting \code{robust = TRUE} will tilt the CRM weights at each MCMC iteration
-to have the desired mean \text{mu0}. If \code{robust = FALSE}, these weights can
+to have the desired mean \code{mu0}. If \code{robust = FALSE}, these weights can
 vary more in magnitude and lead to downstream numerical instability.
 }
 \examples{
-\donrun{
+\dontrun{
 ctrl <- dpglm.control(burnin = 100,
                       thin = 2,
                       save = 500,

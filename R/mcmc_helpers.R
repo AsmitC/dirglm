@@ -47,7 +47,7 @@ tht_sol <- function(spt, f0, mu, thtst) {
     sampprobs = NULL,
     ySptIndex = NULL,
     thetaStart = thtst,
-    thetaControl = gldrm:::theta.control(logsumexp=TRUE)
+    thetaControl = gldrm::theta.control(logsumexp=TRUE)
   )
   tht <- out$theta
   bpr2 <- out$bPrime2

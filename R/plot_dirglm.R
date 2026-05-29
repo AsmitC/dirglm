@@ -1,6 +1,6 @@
 #' Plot DirGLM Posterior Distributions
 #'
-#' @param fit A fitted \code{dirglm} object.
+#' @param object A fitted \code{dirglm} object.
 #' @param what Specifies which posterior to plot. One of \code{"beta"}
 #' or \code{"f0"}. Defaults to \code{"beta"}.
 #' @param pars Specifies the names or integer indices of
@@ -42,7 +42,7 @@
 #'
 #' @export
 plot_dirglm <- function(
-    fit,
+    object,
     what = c("beta", "f0"),
     pars = NULL,
     top_k = 6,
@@ -63,6 +63,7 @@ plot_dirglm <- function(
     xlim = NULL, ylim = NULL,
     ...
 ) {
+  fit   <- object
   what  <- match.arg(what)
   order <- match.arg(order)
 

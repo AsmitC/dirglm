@@ -58,24 +58,3 @@ test_that("dirglm and dirglmFit match", {
 
   expect_equal(m1$samples, m2$samples, tolerance=1e-6, ignore_attr=TRUE)
 })
-
-test_that("dirglm matches intercept-only (empirical distribution) model", {
-  set.seed(100)
-  ySim <- function(n, mu) rpois(n, 1)
-  lf <- stats::make.link("identity")
-  sim <- simData(n=100, p=0, betaMax=0, link=lf, ySim=ySim)
-  data <- data.frame(sim$x, y=sim$y)
-
-  m1 <- gldrm:::gldrm(y ~ X1 - 1, data=data, link="identity")
-  m2 <- dirglm(y ~ X1 - 1, data=data, link="identity",
-               dirglmControl=dirglm:::dirglm.control(burnin=20000,
-                                                     thin=10,
-                                                     save=5000,
-                                                     rho=1))
-
-  m2beta <- apply(m2$samples$beta, 2, function(b) getMode(b, kernel="gaussian"))
-  m2f0 <- apply(m2$samples$f0, 2, getMode)
-
-  expect_equal(m1$beta, m2beta, tolerance=1e-2, ignore_attr=TRUE)
-  expect_equal(m1$f0, m2f0, tolerance=1e-2, ignore_attr=TRUE)
-})

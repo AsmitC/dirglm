@@ -91,7 +91,7 @@ An object of class \code{"cdpglmControl"}; a list of control
 parameters passed to the internal CDPGLM fitting routine.
 }
 \description{
-Creates a list of control parameters used by \code{\link{cdpglm}} and \code{\linl{cdpglmFit}}.
+Creates a list of control parameters used by \code{\link{cdpglm}} and \code{\link{cdpglmFit}}.
 }
 \examples{
 ctrl <- cdpglm.control(

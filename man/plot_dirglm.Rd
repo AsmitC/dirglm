@@ -5,7 +5,7 @@
 \title{Plot DirGLM Posterior Distributions}
 \usage{
 plot_dirglm(
-  fit,
+  object,
   what = c("beta", "f0"),
   pars = NULL,
   top_k = 6,
@@ -29,7 +29,7 @@ plot_dirglm(
 )
 }
 \arguments{
-\item{fit}{A fitted \code{dirglm} object.}
+\item{object}{A fitted \code{dirglm} object.}
 
 \item{what}{Specifies which posterior to plot. One of \code{"beta"}
 or \code{"f0"}. Defaults to \code{"beta"}.}

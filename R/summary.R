@@ -1,5 +1,5 @@
 #' Creates a summary of a fitted \code{dirglm} object
-#' @param fit A fitted \code{dirglm} object
+#' @param object A fitted \code{dirglm} object
 #' @param prob value between 0 and 1 indicating the desired probability
 #' level for the credible intervals. Defaults to 0.95.
 #' @param robust Logical indicating whether to show robust statistics for
@@ -18,7 +18,9 @@
 #'
 #' @method summary dirglm
 #' @export
-summary.dirglm <- function(fit, prob=0.95, robust=FALSE) {
+summary.dirglm <- function(object, prob=0.95, robust=FALSE) {
+
+  fit <- object
   if (!inherits(fit, "dirglm")) stop("fit must be an object of class 'dirglm'")
   if (prob <= 0 || prob >= 1)   stop("prob must be a value between 0 and 1")
 
@@ -79,8 +81,8 @@ summary.dirglm <- function(fit, prob=0.95, robust=FALSE) {
     thin       = thin,
     save       = save,
     iter       = iter,
-    p_acc_beta = fit$p_acc_beta,
-    p_acc_f0   = fit$p_acc_f0
+    beta_acceptance = fit$beta_acceptance,
+    f0_acceptance   = fit$f0_acceptance
   )
 
   out <- list(meta = meta, beta = beta_tbl, f0 = f0_tbl)
@@ -113,7 +115,7 @@ print.summary.dirglm <- function(x, digits = 3, ...) {
               m$iter, m$burnin, m$thin, m$save))
   cat(sprintf("Number of observations: %d\n", m$nobs))
   cat(sprintf("Acceptance Ratio: beta = %.*f, f0 = %.*f\n\n",
-              digits, m$p_acc_beta, digits, m$p_acc_f0))
+              digits, m$beta_acceptance, digits, m$f0_acceptance))
 
   # Helper
   print_table <- function(df) {
