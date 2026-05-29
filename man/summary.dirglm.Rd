@@ -4,7 +4,7 @@
 \alias{summary.dirglm}
 \title{Creates a summary of a fitted \code{dirglm} object}
 \usage{
-\method{summary}{dirglm}(object, prob = 0.95, robust = FALSE)
+\method{summary}{dirglm}(object, prob = 0.95, robust = FALSE, ...)
 }
 \arguments{
 \item{object}{A fitted \code{dirglm} object}
@@ -15,6 +15,8 @@ level for the credible intervals. Defaults to 0.95.}
 \item{robust}{Logical indicating whether to show robust statistics for
 \code{Estimate} and \code{Est.Error}. Defaults to \code{FALSE}. See
 details for more information.}
+
+\item{...}{Additional arguments, currently unused.}
 }
 \value{
 A an object of class \code{summary.dirglm}. A list

@@ -146,15 +146,15 @@ plot_dirglm <- function(
       if (any(inside)) {
         px <- c(dj$x[inside], rev(dj$x[inside]))
         py <- c(dj$y[inside], rep(0, sum(inside)))
-        polygon(px, py, border = NA, col = band_col)
+        graphics::polygon(px, py, border = NA, col = band_col)
       } else warning("No density values inside the CrI range for '", nm, "'")
 
-      lines(dj$x, dj$y, lwd = line_lwd, col = col)
-      abline(v = cj, lty = 2, col = col)       # center reference
-      mtext(nm, side = 3, line = 0.2, cex = 0.9)
+      graphics::lines(dj$x, dj$y, lwd = line_lwd, col = col)
+      graphics::abline(v = cj, lty = 2, col = col)       # center reference
+      graphics::mtext(nm, side = 3, line = 0.2, cex = 0.9)
     }
 
-    if (k > 1 && nzchar(main)) mtext(main, outer = TRUE, line = 0.6, cex = 1.1)
+    if (k > 1 && nzchar(main)) graphics::mtext(main, outer = TRUE, line = 0.6, cex = 1.1)
     return(invisible(list(what="beta", selected=keep_names)))
   }
 
@@ -179,11 +179,11 @@ plot_dirglm <- function(
     if (is.null(xlim)) xlim <- range(x, finite = TRUE)
 
     plot(NA, xlim = xlim, ylim = ylim, xlab = xlab, ylab = ylab, main = main, ...)
-    segments(x0 = x, y0 = lower, x1 = x, y1 = upper, col = col, lwd = line_lwd)
+    graphics::segments(x0 = x, y0 = lower, x1 = x, y1 = upper, col = col, lwd = line_lwd)
     cap_w <- 0.015 * diff(range(xlim))
-    segments(x - cap_w, upper, x + cap_w, upper, col = col, lwd = line_lwd)
-    segments(x - cap_w, lower, x + cap_w, lower, col = col, lwd = line_lwd)
-    points(x, center, pch = point_pch, cex = point_cex, col = col)
+    graphics::segments(x - cap_w, upper, x + cap_w, upper, col = col, lwd = line_lwd)
+    graphics::segments(x - cap_w, lower, x + cap_w, lower, col = col, lwd = line_lwd)
+    graphics::points(x, center, pch = point_pch, cex = point_cex, col = col)
 
     return(invisible(list(what="f0")))
   }

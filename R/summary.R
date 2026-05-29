@@ -5,6 +5,7 @@
 #' @param robust Logical indicating whether to show robust statistics for
 #' \code{Estimate} and \code{Est.Error}. Defaults to \code{FALSE}. See
 #' details for more information.
+#' @param ... Additional arguments, currently unused.
 #'
 #' @return A an object of class \code{summary.dirglm}. A list
 #' containing with two elements, \code{beta} and \code{f0},
@@ -18,7 +19,7 @@
 #'
 #' @method summary dirglm
 #' @export
-summary.dirglm <- function(object, prob=0.95, robust=FALSE) {
+summary.dirglm <- function(object, prob=0.95, robust=FALSE, ...) {
 
   fit <- object
   if (!inherits(fit, "dirglm")) stop("fit must be an object of class 'dirglm'")
@@ -150,6 +151,7 @@ print.summary.dirglm <- function(x, digits = 3, ...) {
 #' level for the credible intervals. Defaults to 0.95.
 #' @param robust Logical indicating whether to show robust statistics for
 #' \code{Estimate} and \code{Est.Error}. Defaults to \code{FALSE}.
+#' @param ... Additional arguments, currently unused.
 #'
 #' @return An object of class \code{summary.dpglm}. A list containing metadata,
 #' posterior summaries for \code{beta}, and CRM diagnostics.
@@ -163,7 +165,7 @@ print.summary.dirglm <- function(x, digits = 3, ...) {
 #'
 #' @method summary dpglm
 #' @export
-summary.dpglm <- function(object, prob = 0.95, robust = FALSE) {
+summary.dpglm <- function(object, prob = 0.95, robust = FALSE, ...) {
 
   fit <- object
   if (!inherits(fit, "dpglm")) stop("object must be an object of class 'dpglm'")

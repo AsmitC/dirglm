@@ -160,18 +160,18 @@ plot_cdpglm <- function(
       if (any(inside)) {
         px <- c(dj$x[inside], rev(dj$x[inside]))
         py <- c(dj$y[inside], rep(0, sum(inside)))
-        polygon(px, py, border = NA, col = band_col)
+        graphics::polygon(px, py, border = NA, col = band_col)
       } else {
         warning("No density values inside the CrI range for '", nm, "'")
       }
 
-      lines(dj$x, dj$y, lwd = line_lwd, col = col)
-      abline(v = cj, lty = 2, col = col)
-      mtext(nm, side = 3, line = 0.2, cex = 0.9)
+      graphics::lines(dj$x, dj$y, lwd = line_lwd, col = col)
+      graphics::abline(v = cj, lty = 2, col = col)
+      graphics::mtext(nm, side = 3, line = 0.2, cex = 0.9)
     }
 
     if (k > 1 && nzchar(main)) {
-      mtext(main, outer = TRUE, line = 0.6, cex = 1.1)
+      graphics::mtext(main, outer = TRUE, line = 0.6, cex = 1.1)
     }
 
     return(invisible(list(what = "beta", selected = keep_names)))
@@ -221,13 +221,13 @@ plot_cdpglm <- function(
     if (any(inside)) {
       px <- c(dj$x[inside], rev(dj$x[inside]))
       py <- c(dj$y[inside], rep(0, sum(inside)))
-      polygon(px, py, border = NA, col = band_col)
+      graphics::polygon(px, py, border = NA, col = band_col)
     } else {
       warning("No density values inside the CrI range for rho")
     }
 
-    lines(dj$x, dj$y, lwd = line_lwd, col = col)
-    abline(v = center, lty = 2, col = col)
+    graphics::lines(dj$x, dj$y, lwd = line_lwd, col = col)
+    graphics::abline(v = center, lty = 2, col = col)
 
     return(invisible(list(
       what = "rho",
@@ -250,7 +250,7 @@ plot_cdpglm <- function(
     grid <- seq(xlim[1], xlim[2], length.out = grid_length)
     breaks <- c(
       -Inf,
-      (head(grid, -1) + tail(grid, -1)) / 2,
+      (utils::head(grid, -1) + utils::tail(grid, -1)) / 2,
       Inf
     )
 
@@ -306,14 +306,14 @@ plot_cdpglm <- function(
       ...
     )
 
-    polygon(
+    graphics::polygon(
       c(grid, rev(grid)),
       c(lower, rev(upper)),
       border = NA,
       col = band_col
     )
 
-    lines(grid, center, col = col, lwd = line_lwd)
+    graphics::lines(grid, center, col = col, lwd = line_lwd)
 
     return(invisible(list(
       what = "crm",

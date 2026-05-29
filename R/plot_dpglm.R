@@ -4,7 +4,7 @@
 #' @param what Specifies which posterior to plot. One of \code{"beta"}
 #' or \code{"crm"}. Defaults to \code{"beta"}.
 #' @param pars Specifies the names or integer indices of
-#' the \code{beta} coefficients to plot. See details for more information.
+#' the \code{beta} coefficients to plot. See deutils::tails for more information.
 #' @param top_k The number of \code{beta} coefficients to plot if \code{pars}
 #' is \code{NULL} and the number of coefficients is large. Defaults to 6.
 #' @param order Specifies the sorting mechanism for \code{beta} coefficients.
@@ -31,7 +31,7 @@
 #'
 #' @return An invisible list containing information about the plotted object.
 #'
-#' @details
+#' @deutils::tails
 #' If \code{pars = NULL} and the number of \code{beta} coefficients is greater
 #' than \code{top_k}, the top \code{top_k} coefficients ordered by \code{order}
 #' are plotted. The default for \code{top_k} is 6 and the default sorting mechanism
@@ -160,18 +160,18 @@ plot_dpglm <- function(
       if (any(inside)) {
         px <- c(dj$x[inside], rev(dj$x[inside]))
         py <- c(dj$y[inside], rep(0, sum(inside)))
-        polygon(px, py, border = NA, col = band_col)
+        graphics::polygon(px, py, border = NA, col = band_col)
       } else {
         warning("No density values inside the CrI range for '", nm, "'")
       }
 
-      lines(dj$x, dj$y, lwd = line_lwd, col = col)
-      abline(v = cj, lty = 2, col = col)
-      mtext(nm, side = 3, line = 0.2, cex = 0.9)
+      graphics::lines(dj$x, dj$y, lwd = line_lwd, col = col)
+      graphics::abline(v = cj, lty = 2, col = col)
+      graphics::mtext(nm, side = 3, line = 0.2, cex = 0.9)
     }
 
     if (k > 1 && nzchar(main)) {
-      mtext(main, outer = TRUE, line = 0.6, cex = 1.1)
+      graphics::mtext(main, outer = TRUE, line = 0.6, cex = 1.1)
     }
 
     return(invisible(list(what = "beta", selected = keep_names)))
@@ -190,7 +190,7 @@ plot_dpglm <- function(
     grid <- seq(xlim[1], xlim[2], length.out = grid_length)
     breaks <- c(
       -Inf,
-      (head(grid, -1) + tail(grid, -1)) / 2,
+      (utils::head(grid, -1) + utils::tail(grid, -1)) / 2,
       Inf
     )
 
@@ -246,14 +246,14 @@ plot_dpglm <- function(
       ...
     )
 
-    polygon(
+    graphics::polygon(
       c(grid, rev(grid)),
       c(lower, rev(upper)),
       border = NA,
       col = band_col
     )
 
-    lines(grid, center, col = col, lwd = line_lwd)
+    graphics::lines(grid, center, col = col, lwd = line_lwd)
 
     return(invisible(list(
       what = "crm",

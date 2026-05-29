@@ -34,7 +34,7 @@ plot_dpglm(
 or \code{"crm"}. Defaults to \code{"beta"}.}
 
 \item{pars}{Specifies the names or integer indices of
-the \code{beta} coefficients to plot. See details for more information.}
+the \code{beta} coefficients to plot. See deutils::tails for more information.}
 
 \item{top_k}{The number of \code{beta} coefficients to plot if \code{pars}
 is \code{NULL} and the number of coefficients is large. Defaults to 6.}
@@ -81,11 +81,4 @@ An invisible list containing information about the plotted object.
 }
 \description{
 Plot DPGLM Posterior Distributions
-}
-\details{
-If \code{pars = NULL} and the number of \code{beta} coefficients is greater
-than \code{top_k}, the top \code{top_k} coefficients ordered by \code{order}
-are plotted. The default for \code{top_k} is 6 and the default sorting mechanism
-is the coefficient magnitude. If the number of coefficients is less than \code{top_k},
-all of them are plotted.
 }
