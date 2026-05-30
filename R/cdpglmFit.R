@@ -166,19 +166,20 @@ cdpglmFit <- function(formula, data, X, y, group_index,
   linkfun <- link$linkfun
   linkinv <- link$linkinv
 
-  beta_samples  <- matrix(NA, nrow = iter, ncol = p)
+  beta_samples  <- matrix(NA, nrow = save, ncol = p)
   beta_names <- colnames(X)
   if (is.null(beta_names)) beta_names <- paste0("beta_", seq_len(p) - 1L)
   beta_names[1] <- "Intercept"
   colnames(beta_samples) <- beta_names
-  theta_samples <- matrix(NA, nrow = iter, ncol = n)
-  h_samples     <- matrix(NA, nrow = iter, ncol = n)
-  u_samples     <- z_samples <- matrix(NA, nrow = iter, ncol = n)
-  rho_samples   <- numeric(iter)
-  crm_samples   <- list()
-  lnlik_samples <- numeric(iter)
+  theta_samples <- matrix(NA, nrow = save, ncol = n)
+  h_samples     <- matrix(NA, nrow = save, ncol = n)
+  u_samples     <- z_samples <- matrix(NA, nrow = save, ncol = n)
+  rho_samples   <- numeric(save)
+  crm_samples   <- vector("list", save)
+  lnlik_samples <- numeric(save)
 
-  beta_samples[1, ] <- beta <- as.numeric(init$beta)
+  beta <- as.numeric(init$beta)
+  #beta_samples[1, ] <- beta
   beta_mode <- beta
   beta_cov  <- init$varbeta
 
@@ -187,8 +188,10 @@ cdpglmFit <- function(formula, data, X, y, group_index,
   z.tld <- z_tld <- as.numeric(init$crm$z.tld)
   J.tld <- J_tld <- as.numeric(init$crm$J.tld)
 
-  theta_samples[1, ] <- theta <- theta_ref <- as.numeric(init$theta)
-  rho_samples[1] <- rho <- as.numeric(init$rho)
+  theta <- theta_ref <- as.numeric(init$theta)
+  #theta_samples[1, ] <- theta
+  rho <- as.numeric(init$rho)
+  #rho_samples[1] <- rho <- as.numeric(init$rho)
 
   h <- log_copula_contribution_by_obs(
     y = y,
@@ -202,27 +205,28 @@ cdpglmFit <- function(formula, data, X, y, group_index,
     min_y = min_y,
     max_y = max_y
   )
-  h_samples[1, ] <- h
+  # h_samples[1, ] <- h
 
-  crm_samples[[1]] <- list(z.tld = z.tld, J.tld = J.tld)
+  # crm_samples[[1]] <- list(z.tld = z.tld, J.tld = J.tld)
 
   ord <- order(J_tld)[1:M]
   RL <- z_tld[ord]
   RJ <- J_tld[ord]
 
-  z_samples[1, ] <- z <- z_sampler_unifK(
-    y, c0, z.tld, J.tld, theta, min_y, max_y, eps
-  )
+  z <- z_sampler_unifK(y, c0, z.tld, J.tld, theta, min_y, max_y, eps)
+  # z_samples[1, ] <- z
 
   btheta <- b_theta(theta, z.tld, J.tld)
   T_vec <- exp(btheta)
-  u_samples[1, ] <- u <- rgamma(n, shape = 1, rate = T_vec)
+  u <- rgamma(n, shape = 1, rate = T_vec)
+  # u_samples[1, ] <- u
 
   resampled_z <- resample_zstar(z)
   zstar <- resampled_z$zstar
   nstar <- resampled_z$nstar
 
   count_beta <- count_crm <- count_rho <- 0
+  burning <- TRUE
 
   theta0 <- gldrm:::getTheta(
     spt = z.tld,
@@ -249,7 +253,7 @@ cdpglmFit <- function(formula, data, X, y, group_index,
     J.tld_ll <- Jtld_0
   }
 
-  lnlik_samples[1] <- loglik(
+  lnlik <-  loglik(
     linkinv = linkinv,
     z = z,
     X = X,
@@ -257,6 +261,7 @@ cdpglmFit <- function(formula, data, X, y, group_index,
     atoms = z.tld,
     jumps = J.tld_ll
   )
+  # lnlik_samples[1] <- lnlik
 
   # Beta prior
   if (is.null(mb)) {
@@ -285,8 +290,8 @@ cdpglmFit <- function(formula, data, X, y, group_index,
   }
 
   # Start MCMC loop
-  for (itr in 2:iter) {
-    if (itr %% 50 == 0) cat("\nStarting iteration:", itr)
+  for (itr in seq_len(iter)) {
+    if (burning && itr > burnin) burning <- FALSE
 
     # Optimization for beta mode
     result <- tryCatch({
@@ -392,13 +397,13 @@ cdpglmFit <- function(formula, data, X, y, group_index,
               cr_logprop_beta - pr_logprop_beta
 
             if (log(runif(1)) < log_acc_prob) {
-              count_beta <- count_beta + 1
               beta <- beta_
               beta_mode <- beta_mode_
               beta_cov <- beta_cov_
               meanY_x <- mean_z_
               theta <- theta_
               h <- h_
+              if (!burning) count_beta <- count_beta + 1
             }
           }
         }
@@ -501,7 +506,6 @@ cdpglmFit <- function(formula, data, X, y, group_index,
         )
 
       if (log(runif(1)) < log_r) {
-        count_crm <- count_crm + 1
         RL <- crm_star$RL
         RJ <- crm_star$RJ
         zstar <- crm_star$zstar
@@ -510,6 +514,7 @@ cdpglmFit <- function(formula, data, X, y, group_index,
         J.tld <- c(RJ, Jstar)
         theta <- theta_star
         h <- h_star
+        if (!burning) count_crm <- count_crm + 1
       }
     }
 
@@ -564,7 +569,7 @@ cdpglmFit <- function(formula, data, X, y, group_index,
     log_rho <- logpost_prop - logpost_current + log_jacobian
 
     if (log(runif(1)) < log_rho) {
-      count_rho <- count_rho + 1
+      if (!burning) count_rho <- count_rho + 1
       rho <- rho_prop
       h <- h_prop
     }
@@ -590,14 +595,18 @@ cdpglmFit <- function(formula, data, X, y, group_index,
     )
 
     # Storage
-    z_samples[itr, ] <- z
-    u_samples[itr, ] <- u
-    beta_samples[itr, ] <- beta
-    theta_samples[itr, ] <- theta
-    h_samples[itr, ] <- h
-    rho_samples[itr] <- rho
-    crm_samples[[itr]] <- list(z.tld = z.tld, J.tld = J.tld)
-    lnlik_samples[itr] <- lnlik
+    if (itr > burnin && (itr - burnin) %% thin == 0) {
+      j <- (itr - burnin) / thin
+
+      beta_samples[j, ] <- beta
+      theta_samples[j, ] <- theta
+      z_samples[j, ] <- z
+      u_samples[j, ] <- u
+      h_samples[j, ] <- h
+      rho_samples[j] <- rho
+      crm_samples[[j]] <- list(z.tld = z.tld, J.tld = J.tld)
+      lnlik_samples[j] <- lnlik
+    }
   }
 
   crm_samples <- data.frame(
@@ -620,8 +629,8 @@ cdpglmFit <- function(formula, data, X, y, group_index,
     Sb = Sb,
     spt = spt,
     mu0 = mu0,
-    beta_acceptance = count_beta / iter,
-    crm_acceptance = count_crm / iter,
-    rho_acceptance = count_rho / iter
+    beta_acceptance = count_beta / (iter - burnin),
+    crm_acceptance = count_crm / (iter - burnin),
+    rho_acceptance = count_rho / (iter - burnin)
   )
 }

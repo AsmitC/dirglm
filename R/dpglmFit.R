@@ -169,35 +169,39 @@ dpglmFit <- function(formula, data, X, y,        # Data
   linkfun <- link$linkfun
   linkinv <- link$linkinv
 
-  beta_samples <- matrix(NA, nrow = iter, ncol = p)
+  beta_samples <- matrix(NA, nrow = save, ncol = p)
   beta_names <- colnames(X)
   if (is.null(beta_names)) beta_names <- paste0("beta_", seq_len(p) - 1L)
   beta_names[1] <- "Intercept"
   colnames(beta_samples) <- beta_names
-  theta_samples <- matrix(NA, nrow = iter, ncol = n)
-  u_samples <- z_samples <- matrix(NA, nrow = iter, ncol = n)
-  crm_samples   <- list()
-  lnlik_samples <- numeric(iter)
+  theta_samples <- matrix(NA, nrow = save, ncol = n)
+  u_samples <- z_samples <- matrix(NA, nrow = save, ncol = n)
+  crm_samples   <- vector("list", save)
+  lnlik_samples <- numeric(save)
 
-  beta_samples[1, ] <- beta <- as.numeric(init$beta)
+  beta <- as.numeric(init$beta)
+  #beta_samples[1, ] <- beta
   beta_mode <- beta
   beta_cov <- init$varbeta
   meanY_x <- linkinv(X %*% beta)
   z.tld <- z_tld <-  as.numeric(init$crm$z.tld)
   J.tld <- J_tld <- as.numeric(init$crm$J.tld)
-  crm_samples[[1]] <- list(z.tld = z.tld, J.tld = J.tld)
+  #crm_samples[[1]] <- list(z.tld = z.tld, J.tld = J.tld)
 
   ord <- order(J_tld)[1:M]
 
   RL <- z_tld[ord]
   RJ <- J_tld[ord]
-  theta_samples[1, ] <- theta <- theta_ref <- init$theta
-  z_samples[1, ] <- z <- z_sampler_unifK(y, c0, z.tld, J.tld, theta, min_y, max_y, eps)
+  theta <- theta_ref <- init$theta
+  #theta_samples[1, ] <- theta
+  z <- z_sampler_unifK(y, c0, z.tld, J.tld, theta, min_y, max_y, eps)
+  #z_samples[1, ] <- z
 
   btheta <- b_theta(theta, z.tld, J.tld)
 
   T_vec <- exp(btheta)
-  u_samples[1, ] <- u <- rgamma(n, shape = 1, rate = T_vec)
+  u <- rgamma(n, shape = 1, rate = T_vec)
+  #u_samples[1, ] <- u <- rgamma(n, shape = 1, rate = T_vec)
 
   resampled_z <- resample_zstar(z)
   zstar <- resampled_z$zstar
@@ -205,6 +209,7 @@ dpglmFit <- function(formula, data, X, y,        # Data
   Jstar <- rgamma(n = length(nstar), shape = nstar, rate = 1)
 
   count1 <- count2 <- 0
+  burning <- TRUE
 
   theta0 <- gldrm:::getTheta(
     spt = z.tld,
@@ -233,7 +238,8 @@ dpglmFit <- function(formula, data, X, y,        # Data
     J.tld_ll <- Jtld_0
   }
 
-  lnlik_samples[1] <- lnlik <- loglik(linkinv = linkinv, z = z, X = X, beta = beta, atoms = z.tld, jumps = J.tld_ll)
+  lnlik <- loglik(linkinv = linkinv, z = z, X = X, beta = beta, atoms = z.tld, jumps = J.tld_ll)
+  # lnlik_samples[1] <- lnlik
 
   # Beta prior
   if (is.null(mb)) {
@@ -258,7 +264,9 @@ dpglmFit <- function(formula, data, X, y,        # Data
   else if (any(Sb <= 0)) stop("Sb must be positive definite.")
 
   # Start MCMC loop
-  for(itr in 2:iter){
+  for(itr in seq_len(iter)){
+    if (burning && itr > burnin) burning <- FALSE
+
     # Optimization to find the mode
     result <- tryCatch({
       optim(par = beta, fn = logpost_beta, linkinv = linkinv, z = z, X = X,
@@ -311,11 +319,11 @@ dpglmFit <- function(formula, data, X, y,        # Data
             # Metropolis-Hastings acceptance step
             log_acc_prob <- pr_logpost_beta - cr_logpost_beta + cr_logprop_beta - pr_logprop_beta
             if (log(runif(1)) < log_acc_prob) {
-              count1 <- count1 + 1
               beta <- beta_
               beta_mode <- beta_mode_
               beta_cov <- beta_cov_
               meanY_x <- mean_z <- mean_z_
+              if (!burning) count1 <- count1 + 1
             }
           } else message("min(z_) not within z.tld bounds")
         } else message("beta covariance not positive semi-definite")
@@ -393,7 +401,6 @@ dpglmFit <- function(formula, data, X, y,        # Data
         )
 
       if(log(runif(1)) < log_r){
-        count2 <- count2 + 1
         RL <- crm_star$RL
         RJ <- crm_star$RJ
         zstar <- crm_star$zstar
@@ -401,6 +408,7 @@ dpglmFit <- function(formula, data, X, y,        # Data
         z.tld <- c(RL, zstar)
         J.tld <- c(RJ, Jstar)
         theta <- theta_star
+        if (!burning) count2 <- count2 + 1
       }
     }
 
@@ -441,12 +449,16 @@ dpglmFit <- function(formula, data, X, y,        # Data
     lnlik <- loglik(linkinv = linkinv, z = z, X = X, beta = beta, atoms = z.tld, jumps = J.tld_ll)
 
     # Storing MCMC simulations --------------------------------------------------
-    z_samples[itr, ] <- z
-    u_samples[itr, ] <- u
-    beta_samples[itr,] <- beta
-    theta_samples[itr, ] <- theta
-    crm_samples[[itr]] <- list(z.tld = z.tld, J.tld = J.tld)
-    lnlik_samples[itr] <- lnlik
+    if (itr > burnin && (itr - burnin) %% thin == 0) {
+      j <- (itr - burnin) / thin
+
+      beta_samples[j, ] <- beta
+      theta_samples[j, ] <- theta
+      z_samples[j, ] <- z
+      u_samples[j, ] <- u
+      crm_samples[[j]] <- list(z.tld = z.tld, J.tld = J.tld)
+      lnlik_samples[j] <- lnlik
+    }
   }
 
   crm_samples <- data.frame(
@@ -461,6 +473,6 @@ dpglmFit <- function(formula, data, X, y,        # Data
        Sb              = Sb,
        spt             = spt,
        mu0             = mu0,
-       beta_acceptance = count1 / iter,
-       crm_acceptance  = count2 / iter)
+       beta_acceptance = count1 / (iter - burnin),
+       crm_acceptance  = count2 / (iter - burnin))
 }

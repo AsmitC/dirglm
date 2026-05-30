@@ -136,8 +136,8 @@ dirglmFit <- function(formula, data, X, y,                # Data
 
   beta <- init$beta
   f0   <- init$f0
-  beta_samples[1, ] <- beta
-  f0_samples[1, ]   <- f0
+  #beta_samples[1, ] <- beta
+  #f0_samples[1, ]   <- f0
 
   # Validate priors
 
@@ -194,7 +194,7 @@ dirglmFit <- function(formula, data, X, y,                # Data
   burning    <- TRUE
 
   # MCMC loop
-  for (r in 2:iter) {
+  for (r in seq_len(iter)) {
     if (burning && r > burnin) burning <- FALSE
 
     # Beta update
@@ -233,7 +233,7 @@ dirglmFit <- function(formula, data, X, y,                # Data
     if(!burning) n_acc_f0 <- n_acc_f0 + as.integer(acc_f0)
 
     # Storage
-    if (r > burnin & r %% thin == 0) {
+    if (r > burnin & (r - burnin) %% thin == 0) {
       j <- (r - burnin) / thin
       beta_samples[j, ] <- beta
       f0_samples[j, ]   <- f0
@@ -265,7 +265,6 @@ dirglmFit <- function(formula, data, X, y,                # Data
   }
   f0_samples     <- f0star_samples  # projected f0 samples
 
-  colnames(beta_samples) <- c("Intercept", paste0("beta_", seq_len(p-1)))
   colnames(f0_samples)   <- paste0("f0_", seq_len(l))
 
   # Output
