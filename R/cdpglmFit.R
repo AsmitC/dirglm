@@ -53,7 +53,7 @@ cdpglm.control <- function(burnin = 100, thin = 10, save = 1000,
                            mb = NULL, Sb = NULL,
                            M = 50, alpha = 1, delta = 2, c0 = NULL,
                            gamma = 1, mu0 = NULL, spt = NULL, eps = 1e-6,
-                           rhoStart = 0.5, corr = c("ex", "ar1"),
+                           rhoStart = 0.5, corr = "ex",
                            rho_proposal_sd = 0.1,
                            rho_prior_shape = c(8, 2),
                            betaStart = NULL, varbetaStart = NULL,
@@ -69,7 +69,22 @@ cdpglm.control <- function(burnin = 100, thin = 10, save = 1000,
     stop("Number of saved iterations must be an integer >= 1.", call. = FALSE)
   }
 
-  corr <- match.arg(corr)
+  if (!(corr %in% c("ex", "ar1"))) stop("corr must be one of c('ex', 'ar1')")
+
+  if (!is.numeric(rhoStart) || length(rhoStart) != 1L ||
+      !is.finite(rhoStart) || rhoStart <= 0 || rhoStart >= 1) {
+    stop("rhoStart must be a numeric value in (0, 1).", call. = FALSE)
+  }
+
+  if (!is.numeric(rho_proposal_sd) || length(rho_proposal_sd) != 1L ||
+      !is.finite(rho_proposal_sd) || rho_proposal_sd <= 0) {
+    stop("rho_proposal_sd must be a positive numeric value.", call. = FALSE)
+  }
+
+  if (!is.numeric(rho_prior_shape) || length(rho_prior_shape) != 2L ||
+      any(!is.finite(rho_prior_shape)) || any(rho_prior_shape <= 0)) {
+    stop("rho_prior_shape must be a numeric vector of length 2 with positive entries.", call. = FALSE)
+  }
 
   ctrl <- list(
     burnin = burnin,

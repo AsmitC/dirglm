@@ -161,14 +161,14 @@ dirglmFit <- function(formula, data, X, y,                # Data
     sdX     <- c(apply(as.matrix(X[, -1], nrow=n), 2, sd))
     Sbvec   <- (gMprime - gmprime)^2 * c(100, (gamma / (2 * sdX))^2) # Re-scaling on the linear-predictor scale
     Sb      <- diag(Sbvec)
-  } else if (!all(dim(Sb)   == c(p, p))) stop("dim(Sb) must match the number of covariates.")
-  else if   (!all(diag(Sb)) > 0)         stop("Sb must be positive definite.")
-  else if (!all(Sb == diag(diag(Sb))))   Sbdiag <- FALSE
+  } else if (!all(dim(Sb) == c(p, p))) stop("dim(Sb) must match the number of covariates.")
+  else if (!all(diag(Sb) > 0))         stop("Sb must be positive definite.")
+  else if (!identical(Sb, diag(diag(Sb)))) Sbdiag <- FALSE
 
   if (!Sbdiag) {
     joint.update <- TRUE
     warning("Beta prior variance-covariance matrix is non-diagonal. Forcing joint update.")
-    }
+  }
   if (!joint.update) Sb <- diag(Sb)
 
   # Dirichlet prior

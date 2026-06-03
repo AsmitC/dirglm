@@ -19,7 +19,7 @@ cdpglm.control(
   spt = NULL,
   eps = 1e-06,
   rhoStart = 0.5,
-  corr = c("ex", "ar1"),
+  corr = "ex",
   rho_proposal_sd = 0.1,
   rho_prior_shape = c(8, 2),
   betaStart = NULL,
