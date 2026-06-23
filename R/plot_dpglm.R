@@ -188,52 +188,52 @@ plot_dpglm <- function(
     }
 
     grid <- seq(xlim[1], xlim[2], length.out = grid_length)
-    breaks <- c(
-      -Inf,
-      (utils::head(grid, -1) + utils::tail(grid, -1)) / 2,
-      Inf
-    )
 
-    crm_to_grid <- function(z, J, breaks) {
+    crm_to_cdf <- function(z, J, grid) {
       J <- J / sum(J)
-      bin <- cut(z, breaks = breaks, labels = FALSE, include.lowest = TRUE)
 
-      out <- numeric(length(breaks) - 1)
-      rs <- rowsum(J, bin, reorder = FALSE)
-      out[as.integer(rownames(rs))] <- rs[, 1]
+      ord <- order(z)
+      z <- z[ord]
+      J <- J[ord]
+
+      cJ <- cumsum(J)
+      idx <- findInterval(grid, z)
+
+      out <- numeric(length(grid))
+      positive <- idx > 0
+      out[positive] <- cJ[idx[positive]]
       out
     }
 
-    grid_mass <- t(mapply(
-      crm_to_grid,
+    grid_cdf <- t(mapply(
+      crm_to_cdf,
       z = z_list,
       J = J_list,
-      MoreArgs = list(breaks = breaks)
+      MoreArgs = list(grid = grid)
     ))
 
     if (robust) {
-      center <- apply(grid_mass, 2, stats::median, na.rm = TRUE)
+      center <- apply(grid_cdf, 2, stats::median, na.rm = TRUE)
     } else {
-      center <- colMeans(grid_mass, na.rm = TRUE)
+      center <- colMeans(grid_cdf, na.rm = TRUE)
     }
 
     alpha <- (1 - prob) / 2
-    lower <- apply(grid_mass, 2, stats::quantile, probs = alpha, na.rm = TRUE)
-    upper <- apply(grid_mass, 2, stats::quantile, probs = 1 - alpha, na.rm = TRUE)
+    lower <- apply(grid_cdf, 2, stats::quantile, probs = alpha, na.rm = TRUE)
+    upper <- apply(grid_cdf, 2, stats::quantile, probs = 1 - alpha, na.rm = TRUE)
 
     if (is.null(xlab)) xlab <- "Support"
-    if (is.null(ylab)) ylab <- "Probability mass"
+    if (is.null(ylab)) ylab <- "Cumulative probability"
     if (is.null(main)) {
       main <- sprintf(
-        "Posterior %s of CRM (%.0f%% CrI)",
+        "Posterior %s of CRM CDF (%.0f%% CrI)",
         if (robust) "Median" else "Mean",
         100 * prob
       )
     }
 
     if (is.null(ylim)) {
-      ylim <- range(c(lower, upper, center), finite = TRUE)
-      ylim <- grDevices::extendrange(ylim, f = 0.04)
+      ylim <- c(0, 1)
     }
 
     plot(

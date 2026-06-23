@@ -150,7 +150,7 @@ dirglm <- function(formula, data = NULL, link = "log",
   f0Start <- dirglmControl$f0Start
   if (is.null(f0Start)) {
     f0   <- rep(1 / l, l)
-    tht0 <- gldrm:::getTheta(
+    tht0 <- getTheta(
       spt       = spt,
       f0        = f0,
       mu        = mu0,

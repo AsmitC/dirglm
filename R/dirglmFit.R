@@ -252,7 +252,7 @@ dirglmFit <- function(formula, data, X, y,                # Data
   f0star_samples <- matrix(0, nrow = nrow(f0_samples), ncol = length(spt))
   for (iter in 1:nrow(f0_samples)) {
     wh     <- f0_samples[iter, ]
-    theta0 <- gldrm:::getTheta(
+    theta0 <- getTheta(
       spt = spt,
       f0 = wh,
       mu = mu0,

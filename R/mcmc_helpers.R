@@ -40,7 +40,7 @@ logSumExp <- function(x)
 #'
 #' @keywords internal
 tht_sol <- function(spt, f0, mu, thtst) {
-  out <- gldrm:::getTheta(
+  out <- getTheta(
     spt = spt,
     f0 = f0,
     mu = mu,
@@ -394,7 +394,7 @@ z_sampler_unifK <- function(y, c0, crm.atoms, crm.jumps, tht, min_y, max_y, eps)
   n <- length(y)
   lower <- crm.atoms - c0
   upper <- crm.atoms + c0
-  lower[lower < min_y] <- min_y + eps  
+  lower[lower < min_y] <- min_y + eps
   upper[upper > max_y] <- max_y - eps
   width <- upper - lower
   z <- numeric(n)
@@ -464,7 +464,7 @@ resample_zstar <- function(z){
 logpost_beta <- function(beta, linkinv, z, X, atoms, jumps, mu_beta, sigma_beta, h){
   n <- length(z)
   mu <- linkinv(X %*% beta)
-  theta <- gldrm:::getTheta(spt = atoms, f0 = jumps, mu = mu, 
+  theta <- getTheta(spt = atoms, f0 = jumps, mu = mu,
                             ySptIndex = NULL, sampprobs = NULL)$theta
   btheta <- b_theta(theta, atoms, jumps)
   log_post <- sum(theta * z + h - btheta) - sum((beta - mu_beta)^2 / (2 * sigma_beta^2)) # others const in beta
@@ -488,14 +488,14 @@ logpost_beta <- function(beta, linkinv, z, X, atoms, jumps, mu_beta, sigma_beta,
 #' @keywords internal
 loglik <- function(linkinv, z, X, beta, atoms, jumps){
   n <- length(z)
-  #mu <- exp(X %*% beta) / (1 + exp(X %*% beta))   
+  #mu <- exp(X %*% beta) / (1 + exp(X %*% beta))
   # mu <- plogis(X %*% beta) # E old
   mu <- linkinv(X %*% beta)
-  theta <- gldrm:::getTheta(spt = atoms, f0 = jumps, mu = mu, ySptIndex = NULL, 
+  theta <- getTheta(spt = atoms, f0 = jumps, mu = mu, ySptIndex = NULL,
                             sampprobs = NULL)$theta
-  
-  btheta <- b_theta(theta, atoms, jumps) 
-  
+
+  btheta <- b_theta(theta, atoms, jumps)
+
   f0_z <- numeric(n)
   for (i in 1:n) {
     f0_z[i] <- sum(jumps[z[i] == atoms])
@@ -526,12 +526,12 @@ loglik <- function(linkinv, z, X, beta, atoms, jumps){
 log_post_u <- function(u, zstar, nstar, theta, alpha, min_y, max_y, eps, h) {
   # Number of grid points for the continuous part
   R <- 250
-  
+
   # Construct a grid for integration over the continuous part (G_0, uniform on (0,1))
   #z_grid <- seq(eps, 1 - eps, length.out = R)
   z_grid <- seq(min_y + eps, max_y - eps, length.out = R)
   diff_z <- diff(z_grid)[1]  # uniform grid spacing
-  
+
   # ---- Continuous part ----
   # For each grid point v in z_grid, compute in a stabilized manner:
   #    log(1 + sum_i u_i * exp(theta_i * v))
@@ -541,10 +541,10 @@ log_post_u <- function(u, zstar, nstar, theta, alpha, min_y, max_y, eps, h) {
     S <- exp(max_A) * sum(exp(A - max_A))
     log1p(S)  # log(1+S) computed in a numerically stable way
   })
-  
+
   # Riemann-sum approximation of the integral over the continuous part:
   integral_continuous <- sum(cont_vals) * diff_z
-  
+
   # ---- Discrete part ----
   # For each unique atom in zstar, with multiplicity given by nstar,
   # compute: nstar * log(1 + sum_i u_i * exp(theta_i * zstar))
@@ -554,12 +554,12 @@ log_post_u <- function(u, zstar, nstar, theta, alpha, min_y, max_y, eps, h) {
     S <- exp(max_A) * sum(exp(A - max_A))
     log1p(S)
   })
-  
+
   sum_discrete <- sum(disc_vals * nstar)
-  
+
   # Combine the continuous and discrete contributions
   neg_log_post <- alpha * integral_continuous + sum_discrete
-  
+
   return(-neg_log_post)
 }
 
@@ -584,26 +584,26 @@ log_post_u <- function(u, zstar, nstar, theta, alpha, min_y, max_y, eps, h) {
 #' @keywords internal
 sampler_u <- function(u, zstar, nstar, theta, alpha, delta, min_y, max_y, eps, h) {
   n <- length(u) # Get the length of u
-  
+
   for (i in seq_len(n)) {
     u_star <- u
     # Sample from Gamma distribution: shape = delta, scale = u[i] / delta
     u_star[i] <- rgamma(1, shape = delta, scale = u[i] / delta)
-    
+
     # Compute logQ_ratio: log(q(ui | ui_star)) - log(q(ui_star | ui))
-    logQ_ratio <- dgamma(u[i], shape = delta, scale = u_star[i] / delta, log = TRUE) - 
+    logQ_ratio <- dgamma(u[i], shape = delta, scale = u_star[i] / delta, log = TRUE) -
       dgamma(u_star[i], shape = delta, scale = u[i] / delta, log = TRUE)
-    
+
     # Compute logratio
-    logratio <- log_post_u(u_star, zstar, nstar, theta, alpha, min_y, max_y, eps, h) - 
+    logratio <- log_post_u(u_star, zstar, nstar, theta, alpha, min_y, max_y, eps, h) -
       log_post_u(u, zstar, nstar, theta, alpha, min_y, max_y, eps, h) + logQ_ratio
-    
+
     # Metropolis-Hastings acceptance step
     if (log(runif(1)) < logratio) {
       u[i] <- u_star[i]
     } # else, u[i] remains unchanged
   }
-  
+
   return(u)
 }
 
@@ -620,18 +620,18 @@ sampler_u <- function(u, zstar, nstar, theta, alpha, delta, min_y, max_y, eps, h
 #' @export
 b_theta <- function(theta, spt, f0) {
   log_f0_dz <- log(f0) # log density values
-  
+
   # Create the log weights matrix of dimensions length(theta) x length(spt)
   # (i, j)th element is theta[i]*spt[j] + log(f0[j])
   log_weights <- outer(theta, spt, "*") +
     matrix(log_f0_dz, nrow = length(theta), ncol = length(spt), byrow = TRUE)
-  
+
   # Use log-sum-exp trick to compute b(theta) for each theta
   result <- apply(log_weights, 1, function(x) {
     m <- max(x)
     m + log(sum(exp(x - m)))
   })
-  
+
   return(as.vector(result))  # Ensure the output is a vector
 }
 
@@ -911,7 +911,7 @@ log_copula_gaussian <- function(u, rho, corr) {
 log_copula_contribution_by_obs <- function(y, group_index, rho, corr,
                                            crm.atoms, crm.jumps, theta, c0,
                                            min_y, max_y) {
-  
+
   ## 1. Compute marginal CDFs internally
   Fy <- marginal_cdf_unif_kde(y = y,
                      crm.atoms = crm.atoms, crm.jumps = crm.jumps, theta = theta, c0 = c0,
@@ -919,7 +919,7 @@ log_copula_contribution_by_obs <- function(y, group_index, rho, corr,
 
   ## 2. Initialize observation-level output
   logcop_obs <- numeric(length(y))
-  
+
   ## 3. Compute copula contribution per group, then distribute to observations
   groups <- unique(group_index)
 
@@ -929,7 +929,7 @@ log_copula_contribution_by_obs <- function(y, group_index, rho, corr,
     n_i <- length(u)
 
     logc_group <- log_copula_gaussian(u, rho, corr)
-    
+
     # Assign equal share to each observation in the group
     logcop_obs[idx] <- logc_group / n_i
   }
@@ -968,16 +968,16 @@ log_copula_contribution_by_obs <- function(y, group_index, rho, corr,
 #'
 #' @keywords internal
 log_post_rho <- function(rho, logc_obs, shape1, shape2) {
-  
+
   ## Enforce support of the copula parameter
   if (rho <= 0 || rho >= 1) return(-Inf)
-  
+
   ## Copula log-likelihood contribution
   loglik <- sum(logc_obs)
-  
+
   ## Beta prior on rho
   logprior <- dbeta(rho, shape1 = shape1, shape2 = shape2, log = TRUE)
-  
+
   ## Log posterior kernel
   loglik + logprior
 }

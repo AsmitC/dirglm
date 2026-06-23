@@ -243,7 +243,7 @@ cdpglmFit <- function(formula, data, X, y, group_index,
   count_beta <- count_crm <- count_rho <- 0
   burning <- TRUE
 
-  theta0 <- gldrm:::getTheta(
+  theta0 <- getTheta(
     spt = z.tld,
     f0  = J.tld,
     mu  = mu0,
@@ -374,7 +374,7 @@ cdpglmFit <- function(formula, data, X, y, group_index,
               h = h
             )
 
-            theta_ <- gldrm:::getTheta(
+            theta_ <- getTheta(
               spt = z.tld,
               f0  = J.tld,
               mu  = mean_z_,
@@ -426,7 +426,7 @@ cdpglmFit <- function(formula, data, X, y, group_index,
     }
 
     # Theta update
-    theta <- gldrm:::getTheta(
+    theta <- getTheta(
       spt = z.tld,
       f0  = J.tld,
       mu  = meanY_x,
@@ -468,7 +468,7 @@ cdpglmFit <- function(formula, data, X, y, group_index,
 
     if (min(meanY_x) >= min(z.tld_star) && max(meanY_x) <= max(z.tld_star)) {
       # MH step
-      theta_star <- gldrm:::getTheta(
+      theta_star <- getTheta(
         spt = z.tld_star,
         f0  = J.tld_star,
         mu  = meanY_x,
@@ -541,7 +541,7 @@ cdpglmFit <- function(formula, data, X, y, group_index,
     zstar <- resampled_z$zstar
     nstar <- resampled_z$nstar
 
-    theta0 <- gldrm:::getTheta(
+    theta0 <- getTheta(
       spt = z.tld,
       f0  = J.tld,
       mu  = mu0,
